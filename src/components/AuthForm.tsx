@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, Mail, Lock, User, ArrowRight, Loader } from 'lucide-react';
+import { Shield, Mail, Lock, User, ArrowRight, Loader, Globe } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import styles from './AuthForm.module.css';
@@ -11,6 +11,7 @@ export default function AuthForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [country, setCountry] = useState('United States');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -29,7 +30,7 @@ export default function AuthForm() {
         const res = await fetch('/api/auth/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, fullName }),
+          body: JSON.stringify({ email, password, fullName, country }),
         });
         
         const data = await res.json();
@@ -95,6 +96,34 @@ export default function AuthForm() {
                   onChange={(e) => setFullName(e.target.value)}
                   required
                 />
+              </div>
+            </div>
+          )}
+
+          {mode === 'signup' && (
+            <div className={styles.field}>
+              <label className="label" htmlFor="country">
+                Country
+              </label>
+              <div className={styles.inputWrap}>
+                <Globe size={16} className={styles.inputIcon} />
+                <select
+                  id="country"
+                  className={`input ${styles.inputWithIcon}`}
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  style={{ appearance: 'none', cursor: 'pointer' }}
+                  required
+                >
+                  <option value="United States">United States</option>
+                  <option value="India">India</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="Canada">Canada</option>
+                  <option value="Australia">Australia</option>
+                  <option value="Philippines">Philippines</option>
+                  <option value="Nigeria">Nigeria</option>
+                  <option value="South Africa">South Africa</option>
+                </select>
               </div>
             </div>
           )}

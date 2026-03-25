@@ -13,6 +13,9 @@
         0 0 40px rgba(99, 91, 255, 0.08);
     backdrop-filter: blur(18px);
     overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     transition:
         transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
         box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -89,13 +92,13 @@
     font-size: 18px;
     font-weight: 800;
     margin-bottom: 10px;
-    color: var(--text-primary);
+    color: #0f172a;
 }
 
 .description {
     font-size: 15px;
     line-height: 1.7;
-    color: var(--text-secondary);
+    color: #334155;
 }
 
 .shine {

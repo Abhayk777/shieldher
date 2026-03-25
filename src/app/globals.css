@@ -147,7 +147,7 @@ button {
   background: none;
 }
 
-input, textarea {
+input, textarea, select {
   font-family: var(--font-body);
   outline: none;
   border: none;

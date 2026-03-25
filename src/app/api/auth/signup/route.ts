@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 // Use service role key to auto-confirm users on signup
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, fullName } = await request.json();
+    const { email, password, fullName, country } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName || '' },
+      user_metadata: { full_name: fullName || '', country: country || 'United States' },
     });
 
     if (error) {
