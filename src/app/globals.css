@@ -800,55 +800,82 @@ img {
    STATS / OUTCOMES SECTION (dark card)
    ═══════════════════════════════════════ */
 .outcomes-section {
-  padding: 8rem 1rem;
+  padding: 8rem 0;
+  /* Break out of body's 1rem side padding for full bleed */
+  margin-left: -1rem;
+  margin-right: -1rem;
 }
 
 .outcomes-card {
-  max-width: 80rem;
-  margin: 0 auto;
-  border-radius: 3rem;
+  /* Full width, no max-width, no border-radius — true edge-to-edge */
   background: var(--primary);
   overflow: hidden;
   position: relative;
-  padding: 4rem 6rem;
+  padding: 8rem 6rem;
   color: var(--on-primary);
 }
 
 @media (max-width: 768px) {
   .outcomes-card {
-    padding: 3rem 1.5rem;
-    border-radius: 2rem;
+    padding: 5rem 1.5rem;
   }
 }
 
 .outcomes-card-glow {
   position: absolute;
   inset: 0;
-  opacity: 0.1;
+  opacity: 0.12;
   pointer-events: none;
+  z-index: 0;
 }
 
 .outcomes-card-glow-1 {
   position: absolute;
-  top: 0; right: 0;
-  width: 24rem; height: 24rem;
+  top: -4rem; right: -4rem;
+  width: 30rem; height: 30rem;
   background: var(--secondary);
   border-radius: 50%;
   filter: blur(120px);
+  animation: glowPulse 8s ease-in-out infinite;
 }
 
 .outcomes-card-glow-2 {
   position: absolute;
-  bottom: 0; left: 0;
-  width: 24rem; height: 24rem;
-  background: rgba(214, 228, 240, 0.2);
+  bottom: -4rem; left: -4rem;
+  width: 28rem; height: 28rem;
+  background: rgba(162, 203, 239, 0.35);
   border-radius: 50%;
-  filter: blur(120px);
+  filter: blur(100px);
+  animation: glowPulse 10s ease-in-out infinite 2s;
+}
+
+/* A third subtle mid glow */
+.outcomes-card-glow-3 {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20rem; height: 20rem;
+  background: rgba(57, 98, 129, 0.15);
+  border-radius: 50%;
+  filter: blur(80px);
+  animation: glowPulse 12s ease-in-out infinite 4s;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.12; transform: scale(1); }
+  50%       { opacity: 0.22; transform: scale(1.08); }
+}
+
+/* Inner content wrapper keeps text readable at a comfortable max-width
+   while the outcomes-card itself is full bleed */
+.outcomes-inner {
+  max-width: 80rem;
+  margin: 0 auto;
+  position: relative;
+  z-index: 10;
 }
 
 .outcomes-header {
-  position: relative;
-  z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -907,6 +934,12 @@ img {
   font-size: 4.5rem;
   line-height: 1;
   margin: 0.25rem 0;
+  animation: statFadeIn 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes statFadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .outcomes-stat-desc {
@@ -933,14 +966,45 @@ img {
   background: var(--surface-variant);
 }
 
-/* Chart card */
+/* Chart card — enhanced glassmorphism */
 .outcomes-chart-card {
-  background: rgba(229, 226, 217, 0.05);
-  border: 1px solid rgba(199, 199, 199, 0.1);
-  border-radius: 1.5rem;
-  padding: 2rem 3rem;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(162, 203, 239, 0.18);
+  border-radius: 1.75rem;
+  padding: 2rem 2.5rem;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.05) inset,
+    0 8px 48px rgba(0,0,0,0.25),
+    0 1px 0 rgba(162, 203, 239, 0.1) inset;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.outcomes-chart-card:hover {
+  border-color: rgba(162, 203, 239, 0.32);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.07) inset,
+    0 12px 64px rgba(0,0,0,0.35),
+    0 1px 0 rgba(162, 203, 239, 0.15) inset;
+}
+
+/* Subtle shimmer line across the top of the chart card */
+.outcomes-chart-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(162, 203, 239, 0.5), transparent);
+  animation: shimmerLine 4s ease-in-out infinite;
+}
+
+@keyframes shimmerLine {
+  0%   { opacity: 0.3; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.3; }
 }
 
 @media (max-width: 768px) {

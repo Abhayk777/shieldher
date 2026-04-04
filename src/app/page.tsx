@@ -244,7 +244,11 @@ export default function Home() {
           <div className="outcomes-card-glow">
             <div className="outcomes-card-glow-1" />
             <div className="outcomes-card-glow-2" />
+            <div className="outcomes-card-glow-3" />
           </div>
+
+          {/* Centered content wrapper — constrains to readable width while bg is full-bleed */}
+          <div className="outcomes-inner">
 
           <Reveal>
             <div className="outcomes-header">
@@ -345,6 +349,8 @@ export default function Home() {
                 </div>
               </div>
             </Reveal>
+          </div>
+          {/* /outcomes-inner */}
           </div>
         </div>
       </section>
