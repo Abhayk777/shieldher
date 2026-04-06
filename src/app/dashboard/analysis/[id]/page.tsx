@@ -45,6 +45,7 @@ interface DecryptedAnalysis {
     legal_analysis?: {
       summary: string;
       potential_violations: string[];
+      powered_by_kanoon?: boolean;
       disclaimer: string;
     };
     rpa_filing_data?: {
@@ -863,9 +864,22 @@ export default function AnalysisDetailPage() {
             Preliminary Legal Analysis
           </h2>
           <div className={`${styles.detailCard} ${styles.legalCard}`}>
-            <p className={styles.legalSummary}>
-              {details.legal_analysis.summary}
-            </p>
+            {details.legal_analysis.powered_by_kanoon && (
+              <div style={{display:'flex', alignItems:'center', gap:'6px', marginBottom:'1rem', padding:'6px 12px', background:'rgba(16,185,129,0.1)', color:'var(--success)', borderRadius:'100px', width:'fit-content', fontSize:'0.75rem', fontWeight:600}}>
+                <Scale size={13} />
+                <span>Deep Legal Profile powered by Indian Kanoon API</span>
+              </div>
+            )}
+            <div className={styles.legalSummary} style={{display:'flex', flexDirection:'column', gap:'0.75rem', lineHeight:'1.6'}}>
+              {details.legal_analysis.summary.split('\n').map((line: string, i: number) => {
+                if (line.startsWith('## ')) return <h3 key={i} style={{marginTop: '1rem', color:'var(--text)', fontSize:'1.1rem'}}>{line.replace('## ', '').replace(/\*\*/g, '')}</h3>;
+                if (line.startsWith('# ')) return <h2 key={i} style={{marginTop: '1.2rem', color:'var(--text)'}}>{line.replace('# ', '').replace(/\*\*/g, '')}</h2>;
+                if (line.startsWith('- ')) return <li key={i} style={{marginLeft: '1.5rem'}}>{line.replace('- ', '').replace(/\*\*/g, '')}</li>;
+                if (line.trim() === '') return null;
+                const parts = line.split(/\*\*(.*?)\*\*/g);
+                return <p key={i}>{parts.map((p, j) => j % 2 === 1 ? <strong key={j}>{p}</strong> : p)}</p>;
+              })}
+            </div>
 
             {details.legal_analysis.potential_violations &&
               details.legal_analysis.potential_violations.length > 0 && (

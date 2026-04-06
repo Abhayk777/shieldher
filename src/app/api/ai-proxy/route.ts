@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
               "legal_analysis": {
                 "summary": "String",
                 "potential_violations": ["Array of strings"],
+                "kanoon_search_keywords": "A concise search query (e.g. 'cyber stalking section 354d ipc' or 'online harassment') to find relevant precedents on Indian Kanoon. Use max 4-5 core keywords. Leave empty string if not applicable.",
                 "disclaimer": "This AI-generated analysis is for informational purposes only and does not constitute professional legal advice. Please consult with a qualified attorney."
               },
               "rpa_filing_data": {
@@ -104,6 +105,63 @@ export async function POST(request: NextRequest) {
     // Parse the JSON safely
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(cleanText);
+
+    // --- INDIAN KANOON INTEGRATION ---
+    if (process.env.KANOON_API_TOKEN && result.details?.legal_analysis?.kanoon_search_keywords) {
+      try {
+        const query = result.details.legal_analysis.kanoon_search_keywords;
+        const kRes = await fetch('https://api.indiankanoon.org/search/', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${process.env.KANOON_API_TOKEN}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          body: new URLSearchParams({ formInput: query }).toString()
+        });
+
+        if (kRes.ok) {
+          const kData = await kRes.json();
+          // Extract top 4 results
+          const topDocs = (kData.docs || []).slice(0, 4).map((d: any) => 
+            `- Title: ${d.title.replace(/<[^>]+>/g, '')}\n  Snippet: ${d.headline.replace(/<[^>]+>/g, '')}\n  Type: ${d.docsource}`
+          ).join('\n\n');
+
+          if (topDocs) {
+            const synthesisPrompt = `You are an expert Indian Cyber-Lawyer. 
+Below is an initial assessment of an online abuse case, followed by actual legal precedents and statutes fetched fresh from the Indian Kanoon legal database.
+
+Initial Assessment:
+${result.details.legal_analysis.summary}
+Violations: ${result.details.legal_analysis.potential_violations.join(', ')}
+
+Indian Kanoon Database Search Results for "${query}":
+${topDocs}
+
+Task: Draft a formal, court-ready Preliminary Legal Memo in Markdown format. 
+The memo must:
+1. Be professional, empathetic to the victim, and clearly structured.
+2. Heavily cite the specific Indian Kanoon results provided above to explain how those precise statutes or precedents apply to the victim's situation.
+3. Be formatted beautifully using markdown headers (e.g., ## Case Facts, ## Applicable Laws, ## Case Precedents, ## Recommendations).
+4. Conclude with the explicit disclaimer: "*This AI-generated analysis is for informational purposes only and does not constitute professional legal advice. Please consult with a qualified attorney.*"
+
+Do not summarize the search results dryly; weave them into a powerful legal analysis document.`;
+
+            // Second Gemini call to synthesize the Kanoon data
+            const memoResponse = await model.generateContent(synthesisPrompt);
+            result.details.legal_analysis.summary = memoResponse.response.text();
+            result.details.legal_analysis.powered_by_kanoon = true;
+          }
+        } else {
+          const errText = await kRes.text();
+          console.error(`Kanoon API returned ${kRes.status}: ${errText}`);
+        }
+      } catch (kanoonErr) {
+        console.error('Kanoon sub-pipeline failed:', kanoonErr);
+        // We catch errors so the pipeline gracefully falls back to the original Gemini analysis
+      }
+    }
 
     // Return the AI result directly to the browser — NOTHING is saved to DB/storage
     return NextResponse.json({ success: true, analysis: result });
