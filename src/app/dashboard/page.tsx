@@ -363,27 +363,17 @@ export default function DashboardPage() {
   const safeDelta = deltaPercent(monthNow.safe, monthPrev.safe);
   const flaggedDelta = deltaPercent(monthNow.reviewed, monthPrev.reviewed);
 
-  const healthScore = useMemo(() => {
-    if (analyses.length === 0) return 75;
-
-    const scoreMap: Record<RiskLevel, number> = {
-      safe: 100,
-      low: 82,
-      medium: 58,
-      high: 32,
-      critical: 14,
-    };
-
-    const total = analyses.reduce((sum, analysis) => sum + scoreMap[analysis.risk_level], 0);
-    const avg = Math.round(total / analyses.length);
-    return Math.max(5, Math.min(99, avg));
-  }, [analyses]);
-
-  const gaugeRadius = 88;
-  const gaugeCircumference = 2 * Math.PI * gaugeRadius;
-  const gaugeOffset = gaugeCircumference * (1 - healthScore / 100);
-
-  const gaugeStrokeColor = healthScore >= 72 ? '#466550' : healthScore >= 45 ? '#92713b' : '#a64542';
+  const gaugeOuterRadius = 88;
+  const gaugeMiddleRadius = 72;
+  const gaugeInnerRadius = 56;
+  const gaugeOuterCircumference = 2 * Math.PI * gaugeOuterRadius;
+  const gaugeMiddleCircumference = 2 * Math.PI * gaugeMiddleRadius;
+  const gaugeInnerCircumference = 2 * Math.PI * gaugeInnerRadius;
+  const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
+  const gaugeOuterOffset = gaugeOuterCircumference * (1 - clampPercent(analyzedCoverage) / 100);
+  const gaugeMiddleOffset = gaugeMiddleCircumference * (1 - clampPercent(safeRatio) / 100);
+  const gaugeInnerOffset = gaugeInnerCircumference * (1 - clampPercent(riskyRatio) / 100);
+  const safeScore = totalAnalyzedResults > 0 ? Math.round(safeRatio) : 0;
 
   const visibleAnalyses = analyses.slice(0, 5);
   const expandedAnalysis = analyses.find((analysis) => analysis.id === expandedId) ?? null;
@@ -587,27 +577,52 @@ export default function DashboardPage() {
         </article>
 
         <article className={styles.gaugePanel}>
-          <h2 className={styles.gaugeTitle}>Global Safety Index</h2>
+          <h2 className={styles.gaugeTitle}>Safety Index</h2>
 
           <div className={styles.gaugeWrap}>
             <svg className={styles.gaugeSvg} viewBox="0 0 220 220" aria-hidden="true">
-              <circle className={styles.gaugeTrack} cx="110" cy="110" r={gaugeRadius} />
+              <circle className={styles.gaugeTrackOuter} cx="110" cy="110" r={gaugeOuterRadius} />
               <circle
-                className={styles.gaugeProgress}
+                className={`${styles.gaugeRing} ${styles.gaugeRingOuter}`}
                 cx="110"
                 cy="110"
-                r={gaugeRadius}
+                r={gaugeOuterRadius}
                 style={{
-                  strokeDasharray: gaugeCircumference,
-                  strokeDashoffset: gaugeOffset,
-                  stroke: gaugeStrokeColor,
+                  strokeDasharray: gaugeOuterCircumference,
+                  strokeDashoffset: gaugeOuterOffset,
+                }}
+              />
+
+              <circle className={styles.gaugeTrackMiddle} cx="110" cy="110" r={gaugeMiddleRadius} />
+              <circle
+                className={`${styles.gaugeRing} ${styles.gaugeRingSafe}`}
+                cx="110"
+                cy="110"
+                r={gaugeMiddleRadius}
+                style={{
+                  strokeDasharray: gaugeMiddleCircumference,
+                  strokeDashoffset: gaugeMiddleOffset,
+                }}
+              />
+
+              <circle className={styles.gaugeTrackInner} cx="110" cy="110" r={gaugeInnerRadius} />
+              <circle
+                className={`${styles.gaugeRing} ${styles.gaugeRingRisk}`}
+                cx="110"
+                cy="110"
+                r={gaugeInnerRadius}
+                style={{
+                  strokeDasharray: gaugeInnerCircumference,
+                  strokeDashoffset: gaugeInnerOffset,
                 }}
               />
             </svg>
 
             <div className={styles.gaugeCenter}>
-              <p className={styles.gaugeValue}>{healthScore}%</p>
-              <p className={styles.gaugeMeta}>Health Score</p>
+              <div className={styles.gaugeCenterGlass}>
+                <p className={styles.gaugeValue}>{safeScore}%</p>
+                <p className={styles.gaugeMeta}>Safe Results</p>
+              </div>
             </div>
           </div>
 
