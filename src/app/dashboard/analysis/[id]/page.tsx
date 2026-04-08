@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { type Upload, type AnalysisResult, type AnalysisFlag, type RiskLevel } from "@/lib/types";
-import { retrieveKey, decryptFile } from "@/lib/crypto";
+import { retrieveKey, decryptFile, decryptText } from "@/lib/crypto";
 import RiskBadge from "@/components/RiskBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import indiaData from '@/lib/india-districts.json';
@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   ShieldCheck,
   Brain,
-  Target,
   MessageSquare,
   Lightbulb,
   Scale,
@@ -29,6 +28,10 @@ import {
   User,
   Mail,
   Phone,
+  CalendarDays,
+  Heart,
+  Download,
+  ImageIcon,
 } from "lucide-react";
 import styles from "./page.module.css";
 
@@ -90,6 +93,9 @@ const SUSPECT_ID_TYPES = [
   { value: 'upi_id', label: 'UPI ID' },
 ];
 
+const IMAGE_EXT_REGEX = /\.(png|jpe?g|webp|gif|bmp|enc)$/i;
+const AUDIO_EXT_REGEX = /\.(mp3|wav|m4a|ogg|enc)$/i;
+
 export default function AnalysisDetailPage() {
   const params = useParams();
   const uploadId = params.id as string;
@@ -132,61 +138,91 @@ export default function AnalysisDetailPage() {
         .single();
 
       if (analysisData) {
+        const key = await retrieveKey();
+        
+        // Decrypt analysis strings if they are encrypted
+        let summary = analysisData.summary || '';
+        let flags = analysisData.flags || [];
+        let details = analysisData.details || {};
+
+        if (key && analysisData.encrypted_summary) {
+          try {
+            const decryptStr = async (ciphertext: string) => {
+               return await decryptText(key, { iv: analysisData.encryption_iv || '', ciphertext });
+            };
+            summary = await decryptStr(analysisData.encrypted_summary);
+            flags = JSON.parse(await decryptStr(analysisData.encrypted_flags));
+            details = JSON.parse(await decryptStr(analysisData.encrypted_details));
+          } catch (e) {
+            console.error("Failed to decrypt analysis details", e);
+          }
+        }
+
         setAnalysis({
           id: analysisData.id,
           risk_level: analysisData.risk_level,
-          summary: analysisData.summary,
-          flags: analysisData.flags || [],
-          details: analysisData.details || {},
+          summary: summary,
+          flags: flags,
+          details: details,
           created_at: analysisData.created_at,
         });
 
-        const key = await retrieveKey();
-
-        // Helper to decrypt image if IV exists
-        const loadSecureImage = async (url: string, iv: string | null) => {
-          if (!iv || !key) return url; // Fallback to raw if not encrypted or locked
+        // Helper to decrypt media if IV exists
+        const loadSecureMedia = async (url: string, iv: string | null, type: string | null) => {
+          if (!iv || !key) return url;
           try {
             const res = await fetch(url);
             if (!res.ok) return url;
             const buf = await res.arrayBuffer();
-            const blob = await decryptFile(key, buf, iv, 'image/png');
+            const blob = await decryptFile(key, buf, iv, type || 'image/png');
             return URL.createObjectURL(blob);
           } catch (e) {
-            console.error('Failed to decrypt image:', e);
+            console.error('Failed to decrypt media:', e);
             return url;
           }
         };
 
         if (analysisData.uploads) {
           setUpload(analysisData.uploads);
-          const url = await loadSecureImage(analysisData.uploads.file_url, analysisData.uploads.file_iv);
+          const url = await loadSecureMedia(
+            analysisData.uploads.file_url, 
+            analysisData.uploads.file_iv,
+            analysisData.uploads.original_type
+          );
           setDecryptedImageUrl(url);
         }
 
         // 2. Check for batch_id and fetch siblings
-        const batchId = (analysisData.details as any)?.batch_id;
+        const batchId = (details as any)?.batch_id;
         if (batchId) {
           const { data: siblingAnalyses } = await supabase
             .from("analysis_results")
             .select(`
               upload_id,
-              uploads (file_url, file_name, file_iv)
+              uploads (file_url, file_name, file_iv, original_type)
             `)
             .eq("details->>batch_id", batchId);
 
           if (siblingAnalyses) {
             const validAnalyses = siblingAnalyses.filter((a: any) => a.uploads);
             const imagePromises = validAnalyses.map(async (a: any) => {
-              const secureUrl = await loadSecureImage(a.uploads.file_url, a.uploads.file_iv);
+              const secureUrl = await loadSecureMedia(
+                a.uploads.file_url, 
+                a.uploads.file_iv,
+                a.uploads.original_type
+              );
               return { url: secureUrl, name: a.uploads.file_name };
             });
             const images = await Promise.all(imagePromises);
             setBatchImages(images);
           }
         } else if (analysisData.uploads) {
-          // If no batchId, the batch is just this one image
-          const secureUrl = await loadSecureImage(analysisData.uploads.file_url, analysisData.uploads.file_iv);
+          // If no batchId, the batch is just this one item
+          const secureUrl = await loadSecureMedia(
+            analysisData.uploads.file_url, 
+            analysisData.uploads.file_iv,
+            analysisData.uploads.original_type
+          );
           setBatchImages([{ url: secureUrl, name: analysisData.uploads.file_name }]);
         }
       }
@@ -623,7 +659,7 @@ export default function AnalysisDetailPage() {
       <div className={styles.page}>
         <div className={styles.empty}>
           <h3>Analysis not found</h3>
-          <Link href="/dashboard/history" className="btn btn-secondary">
+          <Link href="/dashboard/history" className={styles.emptyButton}>
             Back to History
           </Link>
         </div>
@@ -632,6 +668,81 @@ export default function AnalysisDetailPage() {
   }
 
   const details = analysis.details || {};
+  const fileUrls = (upload.file_url || "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean);
+
+  const getFileKind = (url: string) => {
+    let pathname = url;
+    try {
+      pathname = new URL(url).pathname;
+    } catch {
+      pathname = url;
+    }
+
+    const lower = pathname.toLowerCase();
+    if (IMAGE_EXT_REGEX.test(lower)) return "image";
+    if (AUDIO_EXT_REGEX.test(lower)) return "audio";
+    return "other";
+  };
+
+  const mediaItems = fileUrls.map((url, index) => {
+    const kind = getFileKind(url);
+    const label =
+      kind === "image"
+        ? `Screenshot ${index + 1}`
+        : kind === "audio"
+          ? `Audio Recording ${index + 1}`
+          : `File ${index + 1}`;
+    return { url, kind, label };
+  });
+
+  const confidenceValue =
+    typeof details.confidence_score === "number"
+      ? Math.round(
+          Math.max(
+            0,
+            Math.min(
+              100,
+              (details.confidence_score <= 1
+                ? details.confidence_score * 100
+                : details.confidence_score),
+            ),
+          ) * 10,
+        ) / 10
+      : null;
+
+  const confidenceTone =
+    confidenceValue === null
+      ? "No score"
+      : confidenceValue >= 80
+        ? "High confidence match"
+        : confidenceValue >= 60
+          ? "Moderate confidence"
+          : "Low confidence";
+
+  const categories = analysis.flags?.map((flag) => flag.category.trim()) ?? [];
+  const identifiedPatterns = Array.from(new Set(categories.filter(Boolean))).slice(0, 6);
+
+  const mergedChecklist = [
+    ...(details.recommendations ?? []),
+    ...(details.manipulation_indicators ?? []),
+    ...(details.threat_indicators ?? []),
+  ]
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  const supportChecklist =
+    mergedChecklist.length > 0
+      ? mergedChecklist.slice(0, 4)
+      : [
+          "Preserve original screenshots with visible timestamps.",
+          "Maintain a chronological evidence log for legal review.",
+          "Avoid private follow-ups; keep responses formal and documented.",
+        ];
+
+  const previewMedia = mediaItems.find((item) => item.kind !== "other") ?? mediaItems[0] ?? null;
 
   return (
     <>
@@ -641,13 +752,30 @@ export default function AnalysisDetailPage() {
         Back to History
       </Link>
 
-      <div className={styles.header}>
-        <div className={styles.headerTop}>
-          <div>
-            <h1 className={styles.title}>Analysis Report</h1>
-            <div className={styles.meta}>
+      <div className={styles.breadcrumb}>
+        <span>History</span>
+        <span className={styles.breadcrumbSlash}>/</span>
+        <span className={styles.breadcrumbActive}>
+          Analysis #{analysis.id.slice(0, 8).toUpperCase()}
+        </span>
+      </div>
+
+      <section className={styles.heroGrid}>
+        <div className={styles.heroMain}>
+          <h1 className={styles.title}>
+            Analysis <span>Report</span>
+          </h1>
+          <p className={styles.subtitle}>
+            A detailed forensic breakdown of digital communication patterns and
+            sentiment mapping for professional evidence collection.
+          </p>
+
+          <div className={styles.metaRow}>
+            <div className={styles.metaItem}>
+              <ImageIcon size={13} />
               <span>{upload.file_name}</span>
-              <span className={styles.dot}>•</span>
+            </div>
+            <div className={styles.metaItem}>
               <Clock size={13} />
               <span>
                 {new Date(analysis.created_at).toLocaleDateString("en-US", {
@@ -662,52 +790,56 @@ export default function AnalysisDetailPage() {
               <Lock size={13} />
               <span>End-to-End Encrypted</span>
             </div>
+            <RiskBadge level={analysis.risk_level} size="sm" />
           </div>
-          <RiskBadge level={analysis.risk_level} size="lg" />
         </div>
-      </div>
 
-      {/* ═══ PROMINENT EXPORT BUTTON ═══ */}
-      <div className={styles.exportBanner}>
-        <div className={styles.exportBannerContent}>
-          <div className={styles.exportBannerText}>
-            <FileDown size={22} className={styles.exportBannerIcon} />
-            <div>
-              <h3 className={styles.exportBannerTitle}>
-                Export as Evidence PDF
-              </h3>
-              <p className={styles.exportBannerDesc}>
-                Generate a certified evidence report that{" "}
-                <strong>can be used as supporting evidence</strong> when
-                consulting a lawyer, counselor, or filing a complaint with the
-                authorities. PDF is generated locally in your browser.
-              </p>
+        {/* ═══ PROMINENT EXPORT BUTTON ═══ */}
+        <div className={styles.exportBanner}>
+          <div className={styles.exportBannerContent}>
+            <div className={styles.exportBannerText}>
+              <FileDown size={22} className={styles.exportBannerIcon} />
+              <div>
+                <h3 className={styles.exportBannerTitle}>
+                  Export as Evidence PDF
+                </h3>
+                <p className={styles.exportBannerDesc}>
+                  Generate a certified evidence report that{" "}
+                  <strong>can be used as supporting evidence</strong> when
+                  consulting a lawyer, counselor, or filing a complaint with the
+                  authorities. PDF is generated locally in your browser.
+                </p>
+              </div>
             </div>
+            <p>
+              Generate a timestamped, tamper-evident PDF document suitable for
+              legal proceedings or HR submissions.
+            </p>
+            <button
+              className={styles.exportBtn}
+              onClick={handleExportPDF}
+              disabled={generating}
+            >
+              {generating ? (
+                <>
+                  <Loader size={17} className="animate-spin" />
+                  Generating...
+                </>
+              ) : generated ? (
+                <>
+                  <CheckCircle size={17} />
+                  Downloaded!
+                </>
+              ) : (
+                <>
+                  Download PDF Report
+                  <Download size={16} />
+                </>
+              )}
+            </button>
           </div>
-          <button
-            className={styles.exportBtn}
-            onClick={handleExportPDF}
-            disabled={generating}
-          >
-            {generating ? (
-              <>
-                <Loader size={18} className="animate-spin" />
-                Generating...
-              </>
-            ) : generated ? (
-              <>
-                <CheckCircle size={18} />
-                Downloaded!
-              </>
-            ) : (
-              <>
-                <FileDown size={18} />
-                Download PDF Report
-              </>
-            )}
-          </button>
         </div>
-      </div>
+      </section>
 
       {/* ═══ AUTONOMOUS DISPATCHER BUTTON ═══ */}
       <div className={styles.dispatcherBanner}>
@@ -744,129 +876,209 @@ export default function AnalysisDetailPage() {
         </div>
       </div>
 
-      {/* Screenshot preview */}
-      <div className={styles.screenshotSection}>
-        <h2 className={styles.sectionTitle}>
-          <Target size={18} />
-          Uploaded Evidence ({batchImages.length})
-        </h2>
-        <div className={styles.screenshotGrid}>
-          {batchImages.map((img, idx) => (
-            <div key={idx} className={styles.screenshotWrap}>
-              <img
-                src={img.url}
-                alt={`Batch screenshot ${idx + 1}`}
-                className={styles.screenshot}
+      <section className={styles.primaryGrid}>
+        <div className={styles.summaryPanel}>
+          <div className={styles.panelHead}>
+            <h2>
+              <Brain size={18} />
+              Analysis Summary
+            </h2>
+            <div className={styles.confidenceScoreWrap}>
+              <strong>
+                {confidenceValue !== null ? `${confidenceValue}%` : "--"}
+              </strong>
+              <span>System confidence</span>
+            </div>
+          </div>
+
+          <div className={styles.confidenceTone}>
+            <span className={styles.toneDot} />
+            {confidenceTone}
+          </div>
+
+          <div className={styles.confidenceBar}>
+            <div
+              className={styles.confidenceFill}
+              style={{ width: `${confidenceValue ?? 0}%` }}
+            />
+          </div>
+
+          {identifiedPatterns.length > 0 && (
+            <div className={styles.patternBlock}>
+              <h4>Identified Patterns</h4>
+              <div className={styles.patternChips}>
+                {identifiedPatterns.map((pattern) => (
+                  <span key={pattern} className={styles.patternChip}>
+                    {pattern}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <blockquote className={styles.summaryQuote}>{analysis.summary}</blockquote>
+        </div>
+
+        <div className={styles.tonePanel}>
+          <h2>
+            <MessageSquare size={18} />
+            Tone Analysis
+          </h2>
+          <p>
+            {details.tone_analysis ||
+              "No dedicated tone analysis was generated for this report."}
+          </p>
+
+          <div className={styles.toneMeter}>
+            <div className={styles.toneMetaRow}>
+              <span>Communication Risk Signal</span>
+              <span>{confidenceValue !== null ? `${Math.max(0, Math.round(100 - confidenceValue))}%` : "--"}</span>
+            </div>
+            <div className={styles.toneTrack}>
+              <div
+                className={styles.toneFill}
+                style={{ width: `${confidenceValue !== null ? Math.max(6, 100 - confidenceValue) : 12}%` }}
               />
             </div>
-          ))}
-          {batchImages.length === 0 && (
-            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <Lock size={32} />
-              <p>Unable to decrypt images. Please log in again.</p>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Summary */}
-      <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>
-          <Brain size={18} />
-          Analysis Summary
-        </h2>
-        <div className={styles.summaryCard}>
-          <p>{analysis.summary}</p>
-          {details.confidence_score !== undefined && (
-            <div className={styles.confidence}>
-              <span>Confidence:</span>
-              <div className={styles.confidenceBar}>
-                <div
-                  className={styles.confidenceFill}
-                  style={{ width: `${details.confidence_score}%` }}
-                />
-              </div>
-              <span>{details.confidence_score}%</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Flags */}
-      {analysis.flags && analysis.flags.length > 0 && (
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>
-            <AlertTriangle size={18} />
-            Detected Flags ({analysis.flags.length})
+      <section className={styles.evidenceSection}>
+        <div className={styles.sectionHeading}>
+          <h2>
+            <CalendarDays size={18} />
+            Uploaded Evidence
           </h2>
+        </div>
+
+        <div className={styles.evidenceGrid}>
+          <div className={styles.evidenceStream}>
+            {mediaItems.length > 0 ? (
+              mediaItems.map((item) => (
+                <article key={item.url} className={styles.evidenceBubble}>
+                  <div className={styles.evidenceLabel}>{item.label}</div>
+                  {item.kind === "image" ? (
+                    <img src={item.url} alt={item.label} className={styles.evidenceImage} loading="lazy" />
+                  ) : item.kind === "audio" ? (
+                    <audio controls className={styles.audioPlayer}>
+                      <source src={item.url} />
+                      Your browser does not support the audio element.
+                    </audio>
+                  ) : (
+                    <a href={item.url} target="_blank" rel="noreferrer" className={styles.mediaLink}>
+                      Open uploaded file
+                    </a>
+                  )}
+                </article>
+              ))
+            ) : (
+              <div className={styles.noMedia}>No media evidence was attached.</div>
+            )}
+          </div>
+
+          <aside className={styles.supportRail}>
+            <div className={styles.checkCard}>
+              {supportChecklist.map((tip, idx) => (
+                <div key={`${tip}-${idx}`} className={styles.checkItem}>
+                  <ShieldCheck size={16} />
+                  <span>{tip}</span>
+                </div>
+              ))}
+              <div className={styles.alonePill}>
+                <Heart size={15} />
+                You are not alone.
+              </div>
+            </div>
+
+            {previewMedia && (
+              <div className={styles.previewCard}>
+                {previewMedia.kind === "image" ? (
+                  <img
+                    src={previewMedia.url}
+                    alt={previewMedia.label}
+                    className={styles.previewImage}
+                    loading="lazy"
+                  />
+                ) : previewMedia.kind === "audio" ? (
+                  <audio controls className={styles.audioPlayer}>
+                    <source src={previewMedia.url} />
+                    Your browser does not support the audio element.
+                  </audio>
+                ) : (
+                  <a href={previewMedia.url} target="_blank" rel="noreferrer" className={styles.mediaLink}>
+                    Open uploaded file
+                  </a>
+                )}
+              </div>
+            )}
+          </aside>
+        </div>
+      </section>
+
+      {analysis.flags && analysis.flags.length > 0 && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeading}>
+            <h2>
+              <AlertTriangle size={18} />
+              Detected Flags ({analysis.flags.length})
+            </h2>
+          </div>
           <div className={styles.flagGrid}>
             {analysis.flags.map((flag, i) => (
-              <div key={i} className={styles.flagCard}>
+              <article key={i} className={styles.flagCard}>
                 <div className={styles.flagHeader}>
                   <RiskBadge level={flag.severity} size="sm" />
                   <span className={styles.flagCategory}>{flag.category}</span>
                 </div>
                 <p className={styles.flagDesc}>{flag.description}</p>
                 {flag.evidence && (
-                  <div className={styles.evidence}>
+                  <div className={styles.evidenceText}>
                     <MessageSquare size={13} />
                     <span>&ldquo;{flag.evidence}&rdquo;</span>
                   </div>
                 )}
-              </div>
+              </article>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Tone Analysis */}
-      {details.tone_analysis && (
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>
-            <MessageSquare size={18} />
-            Tone Analysis
-          </h2>
-          <div className={styles.detailCard}>
-            <p>{details.tone_analysis}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Manipulation Indicators */}
-      {details.manipulation_indicators &&
-        details.manipulation_indicators.length > 0 && (
-          <div className={styles.section}>
-            <h2 className={styles.sectionTitle}>
+      {details.manipulation_indicators && details.manipulation_indicators.length > 0 && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeading}>
+            <h2>
               <AlertTriangle size={18} />
               Manipulation Indicators
             </h2>
-            <ul className={styles.indicatorList}>
-              {details.manipulation_indicators.map((ind, i) => (
-                <li key={i}>{ind}</li>
-              ))}
-            </ul>
           </div>
-        )}
+          <ul className={styles.bulletList}>
+            {details.manipulation_indicators.map((ind, i) => (
+              <li key={i}>{ind}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
-      {/* Recommendations */}
       {details.recommendations && details.recommendations.length > 0 && (
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>
-            <Lightbulb size={18} />
-            Recommendations
-          </h2>
-          <ul className={styles.recList}>
+        <section className={styles.section}>
+          <div className={styles.sectionHeading}>
+            <h2>
+              <Lightbulb size={18} />
+              Recommendations
+            </h2>
+          </div>
+          <ul className={styles.recommendationList}>
             {details.recommendations.map((rec, i) => (
               <li key={i}>
-                <ShieldCheck size={14} />
+                <ShieldCheck size={15} />
                 <span>{rec}</span>
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
 
-      {/* Legal Analysis */}
       {details.legal_analysis && (
         <div className={styles.section}>
           <h2 className={styles.sectionTitle}>

@@ -140,53 +140,41 @@ export async function decryptFile(
   return new Blob([plaintext], { type: mimeType });
 }
 
-// ═══ KEY STORAGE (SESSION ONLY) ═══
+// ═══ KEY STORAGE (MEMORY ONLY — WIPED ON RELOAD) ═══
 
-const KEY_STORAGE_KEY = 'shieldher_encryption_key';
-const SALT_STORAGE_KEY = 'shieldher_encryption_salt';
+let memoizedKey: CryptoKey | null = null;
+let memoizedSalt: string | null = null;
 
 /**
- * Export the CryptoKey to a base64 string and store in sessionStorage.
- * The key is cleared when the browser tab is closed.
+ * Store the CryptoKey and salt in memory.
+ * This will be lost as soon as the page is reloaded or the tab is closed.
  */
 export async function storeKey(key: CryptoKey, salt: string): Promise<void> {
-  const exported = await crypto.subtle.exportKey('raw', key);
-  const keyBase64 = uint8ArrayToBase64(new Uint8Array(exported));
-  sessionStorage.setItem(KEY_STORAGE_KEY, keyBase64);
-  sessionStorage.setItem(SALT_STORAGE_KEY, salt);
+  memoizedKey = key;
+  memoizedSalt = salt;
 }
 
 /**
- * Retrieve the CryptoKey from sessionStorage.
- * Returns null if no key is stored (user needs to re-authenticate).
+ * Retrieve the CryptoKey from memory.
+ * Returns null if no key is stored (user needs to re-authenticate or unlock vault).
  */
 export async function retrieveKey(): Promise<CryptoKey | null> {
-  const keyBase64 = sessionStorage.getItem(KEY_STORAGE_KEY);
-  if (!keyBase64) return null;
-
-  const keyData = base64ToUint8Array(keyBase64);
-  return crypto.subtle.importKey(
-    'raw',
-    keyData.buffer as ArrayBuffer,
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
+  return memoizedKey;
 }
 
 /**
  * Clear the stored encryption key (on logout).
  */
 export function clearKey(): void {
-  sessionStorage.removeItem(KEY_STORAGE_KEY);
-  sessionStorage.removeItem(SALT_STORAGE_KEY);
+  memoizedKey = null;
+  memoizedSalt = null;
 }
 
 /**
- * Get the stored salt from sessionStorage.
+ * Get the stored salt from memory.
  */
 export function getStoredSalt(): string | null {
-  return sessionStorage.getItem(SALT_STORAGE_KEY);
+  return memoizedSalt;
 }
 
 // ═══ UTILITY: Base64 ↔ Uint8Array ═══

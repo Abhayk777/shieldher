@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, X, FileText, CheckCircle2 } from "lucide-react";
+import { Upload, X, CheckCircle, Loader, FileAudio, FileText } from "lucide-react";
 import styles from "./UploadZone.module.css";
 
 interface UploadedFile {
@@ -12,11 +12,13 @@ interface UploadedFile {
 interface UploadZoneProps {
   onFilesSelected: (files: File[]) => void;
   isUploading?: boolean;
+  variant?: "default" | "dashboard";
 }
 
 export default function UploadZone({
   onFilesSelected,
   isUploading = false,
+  variant = "default",
 }: UploadZoneProps) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
 
@@ -35,6 +37,11 @@ export default function UploadZone({
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    accept: {
+      "image/*": [".png", ".jpg", ".jpeg", ".webp"],
+      "audio/*": [".mp3", ".wav", ".m4a", ".aac", ".ogg"],
+    },
+    maxSize: 10 * 1024 * 1024, // 10MB
     multiple: true,
   });
 
@@ -47,42 +54,68 @@ export default function UploadZone({
   };
 
   return (
-    <div className={styles.wrapper}>
+    <div className={`${styles.wrapper} ${variant === "dashboard" ? styles.dashboardTheme : ""}`}>
       <div
         {...getRootProps()}
         className={`${styles.dropzone} ${isDragActive ? styles.active : ""} ${isUploading ? styles.disabled : ""
           }`}
       >
         <input {...getInputProps()} />
-        <div className={styles.content}>
-          <div className={styles.iconWrapper}>
-            <Upload className={styles.icon} />
+        <div className={styles.dropContent}>
+          <div className={styles.iconWrap}>
+            {isUploading ? (
+              <Loader size={28} className="animate-spin" />
+            ) : (
+              <Upload size={28} />
+            )}
           </div>
-          <h3>Drag & drop chat screenshots</h3>
-          <p>or click to browse • PNG, JPG, WebP up to 10MB</p>
+          <div className={styles.dropText}>
+            <p className={styles.dropTitle}>
+              {isDragActive
+                ? "Drop your evidence here"
+                : isUploading
+                  ? "Uploading..."
+                  : "Drag & drop chat screenshots or recordings"}
+            </p>
+            <p className={styles.dropHint}>
+              or click to browse • Images/Audio up to 10MB
+            </p>
+          </div>
         </div>
       </div>
 
       {files.length > 0 && (
-        <div className={styles.fileList}>
-          {files.map((file, index) => (
-            <div key={index} className={styles.fileCard}>
-              <div className={styles.filePreview}>
-                {file.file.type.startsWith("image/") ? (
-                  <img src={file.preview} alt="preview" />
+        <div className={styles.previews}>
+          {files.map((f, i) => (
+            <div key={i} className={styles.preview}>
+              <div className={styles.previewImgWrap}>
+                {f.file.type.startsWith("audio/") ? (
+                  <div className={styles.audioPreview}>
+                    <FileAudio size={42} className={styles.audioIcon} />
+                  </div>
                 ) : (
-                  <FileText size={24} />
+                  <img
+                    src={f.preview}
+                    alt={f.file.name}
+                    className={styles.previewImg}
+                  />
                 )}
+                <div className={styles.previewOverlay}>
+                  {f.status === "uploading" && (
+                    <Loader size={18} className="animate-spin" />
+                  )}
+                  {f.status === "done" && <CheckCircle size={18} />}
+                </div>
               </div>
               <div className={styles.fileInfo}>
-                <span className={styles.fileName}>{file.file.name}</span>
+                <span className={styles.fileName}>{f.file.name}</span>
                 <span className={styles.fileSize}>
-                  {(file.file.size / 1024).toFixed(0)} KB
+                  {(f.file.size / 1024).toFixed(0)} KB
                 </span>
               </div>
               <button
                 className={styles.removeBtn}
-                onClick={() => removeFile(index)}
+                onClick={() => removeFile(i)}
                 disabled={isUploading}
               >
                 <X size={14} />
