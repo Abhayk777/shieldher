@@ -9,6 +9,7 @@
 const PBKDF2_ITERATIONS = 600000;
 const SALT_LENGTH = 16; // 128 bits
 const IV_LENGTH = 12;   // 96 bits for AES-GCM
+const TAG_LENGTH = 128; // 128 bits for AES-GCM
 
 // ═══ KEY DERIVATION ═══
 
@@ -16,7 +17,7 @@ const IV_LENGTH = 12;   // 96 bits for AES-GCM
  * Generate a random salt for a new user.
  */
 export function generateSalt(): string {
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
+  const salt = window.crypto.getRandomValues(new Uint8Array(SALT_LENGTH)) as any;
   return uint8ArrayToBase64(salt);
 }
 
@@ -29,7 +30,7 @@ export async function deriveKey(password: string, saltBase64: string): Promise<C
   const salt = base64ToUint8Array(saltBase64);
 
   // Import the password as raw key material
-  const keyMaterial = await crypto.subtle.importKey(
+  const keyMaterial = await window.crypto.subtle.importKey(
     'raw',
     encoder.encode(password),
     'PBKDF2',
@@ -38,10 +39,10 @@ export async function deriveKey(password: string, saltBase64: string): Promise<C
   );
 
   // Derive the actual AES-GCM key
-  return crypto.subtle.deriveKey(
+  return window.crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: salt.buffer as ArrayBuffer,
+      salt: salt as any,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
@@ -64,10 +65,10 @@ export interface EncryptedPayload {
  */
 export async function encryptText(key: CryptoKey, plaintext: string): Promise<EncryptedPayload> {
   const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  const iv = window.crypto.getRandomValues(new Uint8Array(IV_LENGTH)) as any;
 
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+  const ciphertext = await window.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, tagLength: TAG_LENGTH },
     key,
     encoder.encode(plaintext)
   );
@@ -85,10 +86,10 @@ export async function decryptText(key: CryptoKey, payload: EncryptedPayload): Pr
   const iv = base64ToUint8Array(payload.iv);
   const ciphertext = base64ToUint8Array(payload.ciphertext);
 
-  const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+  const plaintext = await window.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv as any, tagLength: TAG_LENGTH },
     key,
-    ciphertext.buffer as ArrayBuffer
+    ciphertext as any
   );
 
   return new TextDecoder().decode(plaintext);
@@ -106,10 +107,10 @@ export interface EncryptedFile {
  */
 export async function encryptFile(key: CryptoKey, file: File): Promise<EncryptedFile> {
   const arrayBuffer = await file.arrayBuffer();
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  const iv = window.crypto.getRandomValues(new Uint8Array(IV_LENGTH)) as any;
 
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+  const ciphertext = await window.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, tagLength: TAG_LENGTH },
     key,
     arrayBuffer
   );
@@ -131,8 +132,8 @@ export async function decryptFile(
 ): Promise<Blob> {
   const iv = base64ToUint8Array(ivBase64);
 
-  const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+  const plaintext = await window.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv as any, tagLength: TAG_LENGTH },
     key,
     encryptedData
   );
@@ -181,7 +182,7 @@ export function getStoredSalt(): string | null {
 
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
+  for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);

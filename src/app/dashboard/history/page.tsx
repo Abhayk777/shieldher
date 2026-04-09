@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { type Upload, type AnalysisResult } from "@/lib/types";
-import { deriveKey, decryptText, decryptFile, storeKey, retrieveKey } from "@/lib/crypto";
+import { deriveKey, storeKey, retrieveKey, uint8ArrayToBase64 } from "@/lib/crypto";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   FileSearch,
@@ -78,12 +78,11 @@ export default function HistoryPage() {
       if (data) {
         setUploads(data as UploadWithAnalysis[]);
         
-        // Automatic unlock if the key is already in memory (session hasn't been wiped)
+        // Automatic unlock if the key is already in memory
         const key = await retrieveKey();
         if (key) {
           setIsUnlocked(true);
-          // Trigger a silent decryption of the loaded items
-          performSilentDecryption(key, data as UploadWithAnalysis[]);
+          performProxyDecryption(key, data as UploadWithAnalysis[]);
         }
       }
       setLoading(false);
@@ -91,49 +90,44 @@ export default function HistoryPage() {
     fetchHistory();
   }, []);
 
-  const performSilentDecryption = async (key: CryptoKey, items: UploadWithAnalysis[]) => {
+  const performProxyDecryption = async (key: CryptoKey, items: UploadWithAnalysis[]) => {
       try {
-        const decryptedUploads = await Promise.all(
-          items.map(async (upload) => {
-            let decryptedUrl = undefined;
+        const rawKeyBuffer = await window.crypto.subtle.exportKey('raw', key);
+        const masterKeyBase64 = uint8ArrayToBase64(new Uint8Array(rawKeyBuffer));
 
-            if (upload.file_iv) {
-              try {
-                const res = await fetch(upload.file_url);
-                if (res.ok) {
-                  const buf = await res.arrayBuffer();
-                  const decryptedBlob = await decryptFile(key, buf, upload.file_iv, upload.original_type || 'image/png');
-                  decryptedUrl = URL.createObjectURL(decryptedBlob);
-                }
-              } catch (e) {
-                console.error("Failed to decrypt item", e);
-              }
-            }
+        const decryptedUploads: UploadWithAnalysis[] = [];
+        for (const upload of items) {
+          // Only proxy decrypt items that have encrypted fields or IVs
+          if (!upload.file_iv && !upload.analysis_results?.some(a => a.encrypted_summary)) {
+            decryptedUploads.push(upload); 
+            continue;
+          }
 
-            if (upload.analysis_results) {
-              const decryptedResults = await Promise.all(
-                upload.analysis_results.map(async (analysis) => {
-                  if (analysis.encrypted_summary) {
-                    try {
-                      // Note: We use the same IV for all analytical fields for simplicity in this schema
-                      const payload = { iv: analysis.encryption_iv || '', ciphertext: analysis.encrypted_summary };
-                      const decryptedSummary = await decryptText(key, payload);
-                      return { ...analysis, summary: decryptedSummary };
-                    } catch {
-                      return analysis;
-                    }
-                  }
-                  return analysis;
-                })
-              );
-              return { ...upload, analysis_results: decryptedResults, decrypted_url: decryptedUrl };
+          try {
+            const res = await fetch('/api/decrypt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uploadId: upload.id, masterKey: masterKeyBase64 })
+            });
+            
+            if (res.ok) {
+              const data = await res.json();
+              decryptedUploads.push({ 
+                ...upload, 
+                analysis_results: data.analysis ? [data.analysis] : (upload.analysis_results || []), 
+                decrypted_url: data.decryptedMedia 
+              });
+            } else {
+              decryptedUploads.push(upload);
             }
-            return { ...upload, decrypted_url: decryptedUrl };
-          })
-        );
+          } catch (e) {
+            console.error(`Proxy decryption failed for ${upload.id}:`, e);
+            decryptedUploads.push(upload);
+          }
+        }
         setUploads(decryptedUploads);
       } catch (err) {
-        console.error("Silent decryption failed", err);
+        console.error("Proxy decryption master loop failed", err);
       }
   };
 
@@ -147,79 +141,30 @@ export default function HistoryPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) throw new Error("Not logged in");
 
-      // Verify the password with Supabase
+      // 1. Verify password
       const { error } = await supabase.auth.signInWithPassword({
         email: user.email,
         password: passwordPrompt,
       });
 
-      if (error) {
-        throw new Error("Incorrect password");
-      }
+      if (error) throw new Error("Incorrect password");
 
-      // Check if we have legacy encrypted text OR encrypted images
-      const hasEncryptedData = uploads.some((u) =>
-        u.file_iv || u.analysis_results?.some((a) => a.summary === "[encrypted]" || a.encrypted_summary)
-      );
+      // 2. Derive key browser-side
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("encryption_salt")
+        .eq("id", user.id)
+        .single();
 
-      if (hasEncryptedData) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("encryption_salt")
-          .eq("id", user.id)
-          .single();
+      if (!profile?.encryption_salt) throw new Error("Encryption profile not found");
 
-        if (profile?.encryption_salt) {
-          try {
-            const key = await deriveKey(passwordPrompt, profile.encryption_salt);
-            await storeKey(key, profile.encryption_salt); // Cache it globally for the session limits
-            
-            // Decrypt legacy items AND images
-            const decryptedUploads = await Promise.all(
-              uploads.map(async (upload) => {
-                let decryptedUrl = undefined;
-
-                if (upload.file_iv) {
-                  try {
-                    const res = await fetch(upload.file_url);
-                    if (res.ok) {
-                      const buf = await res.arrayBuffer();
-                      const decryptedBlob = await decryptFile(key, buf, upload.file_iv, upload.original_type || 'image/png');
-                      decryptedUrl = URL.createObjectURL(decryptedBlob);
-                    }
-                  } catch (e) {
-                    console.error("Failed to decrypt image", e);
-                  }
-                }
-
-                if (upload.analysis_results) {
-                  const decryptedResults = await Promise.all(
-                    upload.analysis_results.map(async (analysis) => {
-                      if (analysis.encrypted_summary) {
-                        try {
-                          const payload = JSON.parse(analysis.encrypted_summary);
-                          const decryptedSummary = await decryptText(key, payload);
-                          return { ...analysis, summary: decryptedSummary };
-                        } catch {
-                          return analysis;
-                        }
-                      }
-                      return analysis;
-                    })
-                  );
-                  return { ...upload, analysis_results: decryptedResults, decrypted_url: decryptedUrl };
-                }
-                return { ...upload, decrypted_url: decryptedUrl };
-              })
-            );
-            setUploads(decryptedUploads);
-          } catch (err) {
-            console.error("Failed to decrypt secure items", err);
-          }
-        }
-      }
-
+      const key = await deriveKey(passwordPrompt, profile.encryption_salt);
+      await storeKey(key, profile.encryption_salt); // Cache in memory
+      
+      // 3. Trigger proxy decryption
       setIsUnlocked(true);
+      performProxyDecryption(key, uploads);
+
     } catch (err: any) {
       setUnlockError(err.message || "Failed to unlock history.");
     } finally {
@@ -239,10 +184,6 @@ export default function HistoryPage() {
     );
   });
 
-  const hasLegacyEncrypted = uploads.some((u) =>
-    u.analysis_results?.some((a) => a.summary === "[encrypted]")
-  );
-
   if (loading) {
     return (
       <div className={styles.page}>
@@ -252,8 +193,6 @@ export default function HistoryPage() {
       </div>
     );
   }
-
-
 
   return (
     <div className={styles.page}>
@@ -266,8 +205,7 @@ export default function HistoryPage() {
         <h1 className={styles.title}>Analysis History</h1>
         <p className={styles.subtitle}>
           Browse your past screenshot uploads and review detailed AI analysis
-          reports. Our system identifies structural discrepancies and security
-          vulnerabilities in real-time.
+          reports. Our forensic proxy ensures zero-admin access to your sensitive data.
         </p>
       </div>
 
@@ -278,7 +216,7 @@ export default function HistoryPage() {
           </div>
           <div className={styles.bannerContent}>
             <h3 className={styles.bannerTitle}>History is Encrypted</h3>
-            <p className={styles.bannerText}>Enter your password to unlock the vault and reveal your sensitive analysis data.</p>
+            <p className={styles.bannerText}>Enter your password to unlock the private forensics proxy and reveal your data.</p>
           </div>
           <form onSubmit={handleUnlock} className={styles.bannerForm}>
             <input
@@ -347,17 +285,19 @@ export default function HistoryPage() {
                   <span className={`${styles.mediaStatus} ${styles[statusTone]}`}>
                     {statusLabel}
                   </span>
-                  {isUnlocked && primaryAsset && isImageAsset(primaryAsset) ? (
-                    <img
-                      src={upload.decrypted_url || primaryAsset}
-                      alt={upload.file_name}
-                      className={styles.mediaImage}
-                    />
-                  ) : isUnlocked && primaryAsset && isAudioAsset(primaryAsset, upload.original_type ?? undefined) ? (
-                    <div className={styles.audioItemPreview}>
-                       <FileAudio size={40} className={styles.audioIcon} />
-                       <audio src={upload.decrypted_url || primaryAsset} controls className={styles.cardAudio} />
-                    </div>
+                  {isUnlocked && (upload.decrypted_url || primaryAsset) ? (
+                    isImageAsset(upload.decrypted_url || primaryAsset || "") ? (
+                      <img
+                        src={upload.decrypted_url || primaryAsset}
+                        alt={upload.file_name}
+                        className={styles.mediaImage}
+                      />
+                    ) : (
+                      <div className={styles.audioItemPreview}>
+                         <FileAudio size={40} className={styles.audioIcon} />
+                         <audio src={upload.decrypted_url || primaryAsset} controls className={styles.cardAudio} />
+                      </div>
+                    )
                   ) : (
                     <div className={styles.mediaPlaceholder}>
                       {isUnlocked ? <ImageIcon size={34} /> : <Lock size={30} />}
@@ -383,7 +323,7 @@ export default function HistoryPage() {
                   {!isUnlocked ? (
                     <div className={styles.lockedAnalysis}>
                       <Lock size={16} />
-                      <span>Protected AI Analysis. Unlock vault to view flags and recommendations.</span>
+                      <span>Private Forensic Data. Unlock proxy to view AI results.</span>
                     </div>
                   ) : analyses.length > 0 ? (
                     <div className={styles.analysisStack}>

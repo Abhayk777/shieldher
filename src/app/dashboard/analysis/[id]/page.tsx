@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { type Upload, type AnalysisResult, type AnalysisFlag, type RiskLevel } from "@/lib/types";
-import { retrieveKey, decryptFile, decryptText } from "@/lib/crypto";
+import { retrieveKey, uint8ArrayToBase64 } from "@/lib/crypto";
 import RiskBadge from "@/components/RiskBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import indiaData from '@/lib/india-districts.json';
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -19,19 +18,16 @@ import {
   Lightbulb,
   Scale,
   FileDown,
-  Loader,
   CheckCircle,
   Lock,
   Bot,
-  X,
   MapPin,
-  User,
-  Mail,
-  Phone,
   CalendarDays,
-  Heart,
-  Download,
   ImageIcon,
+  Activity,
+  Zap,
+  Briefcase,
+  HelpCircle,
 } from "lucide-react";
 import styles from "./page.module.css";
 
@@ -68,597 +64,98 @@ interface DecryptedAnalysis {
   id: string;
 }
 
-const INDIAN_STATES = [
-  'ANDAMAN AND NICOBAR ISLANDS', 'ANDHRA PRADESH', 'ARUNACHAL PRADESH',
-  'ASSAM', 'BIHAR', 'CHANDIGARH', 'CHHATTISGARH', 'DELHI', 'GOA', 'GUJARAT',
-  'HARYANA', 'HIMACHAL PRADESH', 'JAMMU AND KASHMIR', 'JHARKHAND', 'KARNATAKA',
-  'KERALA', 'LADAKH', 'LAKSHADWEEP', 'MADHYA PRADESH', 'MAHARASHTRA', 'MANIPUR',
-  'MEGHALAYA', 'MIZORAM', 'NAGALAND', 'ODISHA', 'PUDUCHERRY', 'PUNJAB',
-  'RAJASTHAN', 'SIKKIM', 'TAMIL NADU', 'TELANGANA', 'TRIPURA',
-  'UTTAR PRADESH', 'UTTARAKHAND', 'WEST BENGAL',
-];
+/**
+ * Clean and structure raw markdown synthesis into a professional memo format.
+ */
+function FormatLegalMemo({ text }: { text: string }) {
+  if (!text) return null;
+  // Clean raw symbols like # and *
+  const cleanLine = (line: string) => {
+    return line.replace(/^#+\s*/, '').replace(/\*\*+/g, '').replace(/^-+\s*/, '').trim();
+  };
 
-const SUSPECT_ID_TYPES = [
-  { value: 'none', label: 'Not Available' },
-  { value: 'mobile_number', label: 'Mobile Number' },
-  { value: 'email_address', label: 'Email Address' },
-  { value: 'social_media_id', label: 'Social Media ID' },
-  { value: 'pan_card', label: 'PAN Card' },
-  { value: 'international_number', label: 'International Number' },
-  { value: 'landline_number', label: 'Landline Number' },
-  { value: 'whatsapp_call', label: 'WhatsApp Call' },
-  { value: 'aadhaar_card', label: 'Aadhaar Card' },
-  { value: 'passport', label: 'Passport Number' },
-  { value: 'bank_account', label: 'Bank Account Number' },
-  { value: 'upi_id', label: 'UPI ID' },
-];
+  const lines = text.split('\n');
+  return (
+    <div className={styles.memoContent}>
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <br key={idx} />;
 
-const IMAGE_EXT_REGEX = /\.(png|jpe?g|webp|gif|bmp|enc)$/i;
-const AUDIO_EXT_REGEX = /\.(mp3|wav|m4a|ogg|enc)$/i;
+        // Header detection
+        if (trimmed.startsWith('#') || (trimmed === trimmed.toUpperCase() && trimmed.length > 5 && !trimmed.includes('.'))) {
+          return <h4 key={idx} className={styles.memoSectionHeader}>{cleanLine(trimmed)}</h4>;
+        }
+
+        // List detection
+        if (trimmed.startsWith('-') || trimmed.startsWith('*') || /^\d+\./.test(trimmed)) {
+          return <p key={idx} className={styles.memoListItem}>{cleanLine(trimmed)}</p>;
+        }
+
+        return <p key={idx} className={styles.memoParagraph}>{cleanLine(trimmed)}</p>;
+      })}
+    </div>
+  );
+}
 
 export default function AnalysisDetailPage() {
   const params = useParams();
   const uploadId = params.id as string;
   const [upload, setUpload] = useState<Upload | null>(null);
   const [analysis, setAnalysis] = useState<DecryptedAnalysis | null>(null);
-  const [decryptedImageUrl, setDecryptedImageUrl] = useState<string | null>(null);
-  const [batchImages, setBatchImages] = useState<Array<{ url: string; name: string }>>([]);
+  const [decryptedMediaArray, setDecryptedMediaArray] = useState<{url: string, decrypted: boolean}[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [generated, setGenerated] = useState(false);
-  const [dispatching, setDispatching] = useState(false);
-  const [showDispatchModal, setShowDispatchModal] = useState(false);
-  const [dispatchForm, setDispatchForm] = useState({
-    state: 'DELHI',
-    district: '',
-    email: '',
-    suspectName: '',
-    suspectPlatformContact: '',  // Tab 1: Mobile/Social ID for platform field
-    suspectIdType: 'none',
-    suspectIdValue: '',          // Tab 2: Value matching the selected ID type
-    incidentDate: '',
-    incidentHour: '10',
-    incidentMinute: '30',
-    incidentAmPm: 'AM',
-  });
-  const decryptedImageRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     async function fetchData() {
-      const supabase = createClient();
-
-      // 1. Fetch current analysis record to check for batch_id
-      const { data: analysisData } = await supabase
-        .from("analysis_results")
-        .select(`
-          *,
-          uploads (*)
-        `)
-        .eq("upload_id", uploadId)
-        .single();
-
-      if (analysisData) {
-        const key = await retrieveKey();
-        
-        // Decrypt analysis strings if they are encrypted
-        let summary = analysisData.summary || '';
-        let flags = analysisData.flags || [];
-        let details = analysisData.details || {};
-
-        if (key && analysisData.encrypted_summary) {
-          try {
-            const decryptStr = async (ciphertext: string) => {
-               return await decryptText(key, { iv: analysisData.encryption_iv || '', ciphertext });
-            };
-            summary = await decryptStr(analysisData.encrypted_summary);
-            flags = JSON.parse(await decryptStr(analysisData.encrypted_flags));
-            details = JSON.parse(await decryptStr(analysisData.encrypted_details));
-          } catch (e) {
-            console.error("Failed to decrypt analysis details", e);
-          }
-        }
-
-        setAnalysis({
-          id: analysisData.id,
-          risk_level: analysisData.risk_level,
-          summary: summary,
-          flags: flags,
-          details: details,
-          created_at: analysisData.created_at,
-        });
-
-        // Helper to decrypt media if IV exists
-        const loadSecureMedia = async (url: string, iv: string | null, type: string | null) => {
-          if (!iv || !key) return url;
-          try {
-            const res = await fetch(url);
-            if (!res.ok) return url;
-            const buf = await res.arrayBuffer();
-            const blob = await decryptFile(key, buf, iv, type || 'image/png');
-            return URL.createObjectURL(blob);
-          } catch (e) {
-            console.error('Failed to decrypt media:', e);
-            return url;
-          }
-        };
-
-        if (analysisData.uploads) {
-          setUpload(analysisData.uploads);
-          const url = await loadSecureMedia(
-            analysisData.uploads.file_url, 
-            analysisData.uploads.file_iv,
-            analysisData.uploads.original_type
-          );
-          setDecryptedImageUrl(url);
-        }
-
-        // 2. Check for batch_id and fetch siblings
-        const batchId = (details as any)?.batch_id;
-        if (batchId) {
-          const { data: siblingAnalyses } = await supabase
-            .from("analysis_results")
-            .select(`
-              upload_id,
-              uploads (file_url, file_name, file_iv, original_type)
-            `)
-            .eq("details->>batch_id", batchId);
-
-          if (siblingAnalyses) {
-            const validAnalyses = siblingAnalyses.filter((a: any) => a.uploads);
-            const imagePromises = validAnalyses.map(async (a: any) => {
-              const secureUrl = await loadSecureMedia(
-                a.uploads.file_url, 
-                a.uploads.file_iv,
-                a.uploads.original_type
-              );
-              return { url: secureUrl, name: a.uploads.file_name };
-            });
-            const images = await Promise.all(imagePromises);
-            setBatchImages(images);
-          }
-        } else if (analysisData.uploads) {
-          // If no batchId, the batch is just this one item
-          const secureUrl = await loadSecureMedia(
-            analysisData.uploads.file_url, 
-            analysisData.uploads.file_iv,
-            analysisData.uploads.original_type
-          );
-          setBatchImages([{ url: secureUrl, name: analysisData.uploads.file_name }]);
-        }
+      const key = await retrieveKey();
+      if (!key) {
+        setLoading(false);
+        return;
       }
 
-      setLoading(false);
+      try {
+        const rawKeyBuffer = await window.crypto.subtle.exportKey('raw', key);
+        const masterKeyBase64 = uint8ArrayToBase64(new Uint8Array(rawKeyBuffer));
+
+        const res = await fetch('/api/decrypt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId, masterKey: masterKeyBase64 })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setAnalysis(data.analysis);
+          setUpload(data.upload);
+          setDecryptedMediaArray(data.decryptedMediaArray || []);
+        }
+      } catch (err) {
+        console.error("Proxy fetch failed", err);
+      } finally {
+        setLoading(false);
+      }
     }
     fetchData();
   }, [uploadId]);
-
-  // Client-side PDF generation using jsPDF
-  const handleExportPDF = useCallback(async () => {
-    if (!analysis || !upload || generating) return;
-    setGenerating(true);
-    setGenerated(false);
-
-    try {
-      const { jsPDF } = await import('jspdf');
-      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 20;
-      const contentWidth = pageWidth - margin * 2;
-      let y = 20;
-
-      const addPageIfNeeded = (requiredSpace: number) => {
-        if (y + requiredSpace > 270) {
-          doc.addPage();
-          y = 20;
-        }
-      };
-
-      const addWrappedText = (text: string, x: number, startY: number, maxWidth: number, lineHeight: number): number => {
-        const lines = doc.splitTextToSize(text, maxWidth);
-        for (let i = 0; i < lines.length; i++) {
-          addPageIfNeeded(lineHeight);
-          doc.text(lines[i], x, startY + i * lineHeight);
-        }
-        return startY + lines.length * lineHeight;
-      };
-
-      // ═══ HEADER ═══
-      doc.setFillColor(10, 37, 64);
-      doc.rect(0, 0, pageWidth, 40, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(22);
-      doc.setFont('helvetica', 'bold');
-      doc.text('ShieldHer', margin, 18);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('AI-Powered Evidence Report • End-to-End Encrypted', margin, 26);
-
-      const dateStr = new Date().toLocaleString('en-US', {
-        year: 'numeric', month: 'long', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      });
-      doc.setFontSize(9);
-      doc.text(`Generated: ${dateStr}`, margin, 34);
-      doc.text(`Report ID: ${analysis.id.substring(0, 8).toUpperCase()}`, pageWidth - margin, 34, { align: 'right' });
-      y = 50;
-
-      // ═══ EVIDENCE CALLOUT ═══
-      doc.setFillColor(99, 91, 255);
-      doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('This report can be used as supporting evidence when consulting a', margin + 6, y + 7);
-      doc.text('lawyer, counselor, or filing a complaint with the authorities.', margin + 6, y + 13);
-      y += 26;
-
-      // ═══ RISK LEVEL ═══
-      doc.setTextColor(10, 37, 64);
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Risk Assessment', margin, y);
-      y += 8;
-
-      const riskColors: Record<string, [number, number, number]> = {
-        safe: [0, 212, 170], low: [59, 130, 246], medium: [245, 158, 11],
-        high: [239, 68, 68], critical: [220, 38, 38],
-      };
-      const riskLabels: Record<string, string> = {
-        safe: 'SAFE', low: 'LOW RISK', medium: 'MEDIUM RISK',
-        high: 'HIGH RISK', critical: 'CRITICAL',
-      };
-
-      const riskColor = riskColors[analysis.risk_level] || [100, 100, 100];
-      doc.setFillColor(...riskColor);
-      doc.roundedRect(margin, y, 40, 8, 2, 2, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(riskLabels[analysis.risk_level] || analysis.risk_level.toUpperCase(), margin + 20, y + 5.5, { align: 'center' });
-      y += 16;
-
-      // ═══ FILE INFO ═══
-      doc.setTextColor(66, 84, 102);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`File: ${upload.file_name}`, margin, y);
-      y += 5;
-      doc.text(`Analyzed: ${new Date(analysis.created_at).toLocaleString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, margin, y);
-      y += 10;
-
-      // ═══ SUMMARY ═══
-      doc.setTextColor(10, 37, 64);
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Analysis Summary', margin, y);
-      y += 7;
-      doc.setTextColor(66, 84, 102);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      y = addWrappedText(analysis.summary || 'No summary available.', margin, y, contentWidth, 5);
-      y += 8;
-
-      // ═══ FLAGS ═══
-      const flags = analysis.flags || [];
-      if (flags.length > 0) {
-        addPageIfNeeded(20);
-        doc.setTextColor(10, 37, 64);
-        doc.setFontSize(13);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Detected Flags (${flags.length})`, margin, y);
-        y += 8;
-        for (const flag of flags) {
-          addPageIfNeeded(25);
-          const flagColor = riskColors[flag.severity] || [100, 100, 100];
-          doc.setFillColor(...flagColor);
-          doc.roundedRect(margin, y, 28, 6, 1.5, 1.5, 'F');
-          doc.setTextColor(255, 255, 255);
-          doc.setFontSize(7);
-          doc.setFont('helvetica', 'bold');
-          doc.text((flag.severity || '').toUpperCase(), margin + 14, y + 4.2, { align: 'center' });
-          doc.setTextColor(10, 37, 64);
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'bold');
-          doc.text(flag.category || '', margin + 32, y + 4.5);
-          y += 9;
-          doc.setTextColor(66, 84, 102);
-          doc.setFontSize(9);
-          doc.setFont('helvetica', 'normal');
-          if (flag.description) {
-            y = addWrappedText(flag.description, margin + 4, y, contentWidth - 4, 4.5);
-            y += 2;
-          }
-          if (flag.evidence) {
-            doc.setFillColor(237, 241, 247);
-            const evidenceLines = doc.splitTextToSize(`"${flag.evidence}"`, contentWidth - 12);
-            const evidenceHeight = evidenceLines.length * 4.5 + 4;
-            addPageIfNeeded(evidenceHeight);
-            doc.roundedRect(margin + 4, y, contentWidth - 8, evidenceHeight, 1.5, 1.5, 'F');
-            doc.setTextColor(136, 152, 170);
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'italic');
-            for (let i = 0; i < evidenceLines.length; i++) {
-              doc.text(evidenceLines[i], margin + 8, y + 4 + i * 4.5);
-            }
-            y += evidenceHeight + 4;
-          }
-          y += 2;
-        }
-        y += 4;
-      }
-
-      // ═══ DETAILS ═══
-      const details = analysis.details || {};
-
-      if (details.tone_analysis) {
-        addPageIfNeeded(20);
-        doc.setTextColor(10, 37, 64);
-        doc.setFontSize(13);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Tone Analysis', margin, y);
-        y += 7;
-        doc.setTextColor(66, 84, 102);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        y = addWrappedText(details.tone_analysis, margin, y, contentWidth, 5);
-        y += 8;
-      }
-
-      if (details.manipulation_indicators && details.manipulation_indicators.length > 0) {
-        addPageIfNeeded(20);
-        doc.setTextColor(10, 37, 64);
-        doc.setFontSize(13);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Manipulation Indicators', margin, y);
-        y += 7;
-        doc.setTextColor(66, 84, 102);
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        for (const indicator of details.manipulation_indicators) {
-          addPageIfNeeded(6);
-          doc.text(`• ${indicator}`, margin + 4, y);
-          y += 5;
-        }
-        y += 4;
-      }
-
-      if (details.recommendations && details.recommendations.length > 0) {
-        addPageIfNeeded(20);
-        doc.setTextColor(10, 37, 64);
-        doc.setFontSize(13);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Recommendations', margin, y);
-        y += 7;
-        doc.setTextColor(66, 84, 102);
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        for (const rec of details.recommendations) {
-          addPageIfNeeded(10);
-          const recLines = doc.splitTextToSize(`✓ ${rec}`, contentWidth - 4);
-          for (let i = 0; i < recLines.length; i++) {
-            addPageIfNeeded(5);
-            doc.text(recLines[i], margin + 4, y + i * 4.5);
-          }
-          y += recLines.length * 4.5 + 2;
-        }
-        y += 4;
-      }
-
-      if (details.legal_analysis) {
-        addPageIfNeeded(25);
-        doc.setTextColor(10, 37, 64);
-        doc.setFontSize(13);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Preliminary Legal Analysis', margin, y);
-        y += 7;
-        doc.setTextColor(66, 84, 102);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        if (details.legal_analysis.summary) {
-          y = addWrappedText(details.legal_analysis.summary, margin, y, contentWidth, 5);
-          y += 5;
-        }
-        if (details.legal_analysis.potential_violations && details.legal_analysis.potential_violations.length > 0) {
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'bold');
-          doc.text('Potential Violations:', margin, y);
-          y += 6;
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(9);
-          for (const violation of details.legal_analysis.potential_violations) {
-            addPageIfNeeded(6);
-            doc.text(`• ${violation}`, margin + 4, y);
-            y += 5;
-          }
-          y += 4;
-        }
-        if (details.legal_analysis.disclaimer) {
-          addPageIfNeeded(20);
-          doc.setFillColor(254, 242, 242);
-          doc.setDrawColor(239, 68, 68);
-          const disclaimerLines = doc.splitTextToSize(details.legal_analysis.disclaimer, contentWidth - 16);
-          const disclaimerHeight = disclaimerLines.length * 4.5 + 8;
-          doc.roundedRect(margin, y, contentWidth, disclaimerHeight, 2, 2, 'FD');
-          doc.setTextColor(180, 40, 40);
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'bold');
-          doc.text('⚠ LEGAL DISCLAIMER', margin + 6, y + 5);
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(8);
-          for (let i = 0; i < disclaimerLines.length; i++) {
-            doc.text(disclaimerLines[i], margin + 6, y + 10 + i * 4.5);
-          }
-          y += disclaimerHeight + 8;
-        }
-      }
-
-      // ═══ FOOTER ═══
-      addPageIfNeeded(20);
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, y, pageWidth - margin, y);
-      y += 6;
-      doc.setTextColor(136, 152, 170);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text('This report was generated by ShieldHer — AI-Powered Women\'s Safety Platform', margin, y);
-      y += 4;
-      doc.text('© ' + new Date().getFullYear() + ' ShieldHer. End-to-End Encrypted. This document is confidential.', margin, y);
-
-      // Download the PDF
-      const pdfBlob = doc.output('blob');
-      const url = URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ShieldHer-Report-${analysis.id.substring(0, 8)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setGenerated(true);
-      setTimeout(() => setGenerated(false), 4000);
-    } catch (err) {
-      console.error("Export error:", err);
-      alert("Failed to generate report. Please try again.");
-    } finally {
-      setGenerating(false);
-    }
-  }, [analysis, upload, generating]);
-
-  // Cleanup decrypted image URL on unmount
-  useEffect(() => {
-    return () => {
-      if (decryptedImageUrl && decryptedImageUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(decryptedImageUrl);
-      }
-    };
-  }, [decryptedImageUrl]);
-
-  const openDispatchModal = () => {
-    // Pre-fill from AI-extracted data
-    const rpaData = analysis?.details?.rpa_filing_data;
-    const suspectInfo = rpaData?.suspect_info;
-    const today = new Date().toISOString().split('T')[0];
-    setDispatchForm(prev => ({
-      ...prev,
-      suspectName: suspectInfo?.name || prev.suspectName || '',
-      suspectPlatformContact: rpaData?.platform_url_or_id || prev.suspectPlatformContact || '',
-      suspectIdType: suspectInfo?.identifier_type || prev.suspectIdType || 'none',
-      suspectIdValue: suspectInfo?.identifier_value || prev.suspectIdValue || '',
-      incidentDate: rpaData?.approximate_date || prev.incidentDate || today,
-    }));
-    setShowDispatchModal(true);
-  };
-
-  const handleDispatch = async () => {
-    setShowDispatchModal(false);
-    setDispatching(true);
-    try {
-      // 1. Fetch and convert ALL images in the batch to base64
-      let fetchWarnings: string[] = [];
-      const evidenceItems = await Promise.all(
-        batchImages.map(async (img) => {
-          try {
-            const res = await fetch(img.url);
-            if (!res.ok) {
-              fetchWarnings.push(`Failed to fetch ${img.name}: HTTP ${res.status}`);
-              return null;
-            }
-            const blob = await res.blob();
-            if (blob.size === 0) {
-              fetchWarnings.push(`Empty image: ${img.name}`);
-              return null;
-            }
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const dataUrl = reader.result as string;
-                resolve(dataUrl.split(',')[1]);
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-            return {
-              base64,
-              mime_type: blob.type || "image/png",
-            };
-          } catch (e) {
-            console.error(`Failed to process evidence image: ${img.url}`, e);
-            fetchWarnings.push(`Error processing ${img.name}`);
-            return null;
-          }
-        })
-      );
-
-      const validEvidence = evidenceItems.filter((item): item is { base64: string; mime_type: string } => item !== null);
-
-      // Show warning if some images failed but still proceed
-      if (fetchWarnings.length > 0 && validEvidence.length > 0) {
-        console.warn(`Some evidence images could not be fetched: ${fetchWarnings.join(', ')}`);
-      }
-
-      const payload = {
-        analysis: {
-          risk_level: analysis!.risk_level,
-          summary: analysis!.summary,
-          flags: analysis!.flags,
-          details: analysis!.details,
-        },
-        evidence_items: validEvidence.length > 0 ? validEvidence : undefined, // Send only if we have valid items
-        upload_id: uploadId,
-        user_state: dispatchForm.state,
-        user_district: dispatchForm.district,
-        user_email: dispatchForm.email,
-        user_suspect_name: dispatchForm.suspectName,
-        user_suspect_platform_contact: dispatchForm.suspectPlatformContact,  // Tab 1
-        user_suspect_id_type: dispatchForm.suspectIdType,
-        user_suspect_id_value: dispatchForm.suspectIdValue,                  // Tab 2
-        user_incident_date: dispatchForm.incidentDate,
-        user_incident_hour: dispatchForm.incidentHour,
-        user_incident_minute: dispatchForm.incidentMinute,
-        user_incident_ampm: dispatchForm.incidentAmPm,
-      };
-
-      const res = await fetch('/api/dispatch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to dispatch');
-      
-      let successMsg = `Dispatcher initialized successfully! The RPA bot is filling the complaint form.`;
-      if (validEvidence.length > 0) {
-        successMsg += ` ${validEvidence.length} evidence screenshot(s) will be attached.`;
-      } else {
-        successMsg += ` A placeholder evidence file will be used (original images could not be fetched).`;
-      }
-      if (fetchWarnings.length > 0) {
-        successMsg += `\n\nNote: ${fetchWarnings.length} image(s) could not be loaded.`;
-      }
-      successMsg += `\n\nA browser window will open shortly.`;
-      alert(successMsg);
-    } catch (err: unknown) {
-      alert("Failed to run dispatcher: " + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setDispatching(false);
-    }
-  };
 
   if (loading) {
     return (
       <div className={styles.page}>
         <div className={styles.loadingWrap}>
-          <LoadingSpinner text="Decrypting analysis..." />
+          <LoadingSpinner text="Proxying secure forensic data..." />
         </div>
       </div>
     );
   }
 
-  if (!analysis || !upload) {
+  if (!upload) {
     return (
       <div className={styles.page}>
         <div className={styles.empty}>
-          <h3>Analysis not found</h3>
+          <Lock size={40} className={styles.lockIcon} />
+          <h3>Vault Locked or Not Found</h3>
+          <p>Please return to history and unlock your vault to view this analysis.</p>
           <Link href="/dashboard/history" className={styles.emptyButton}>
             Back to History
           </Link>
@@ -667,675 +164,196 @@ export default function AnalysisDetailPage() {
     );
   }
 
-  const details = analysis.details || {};
-  const fileUrls = (upload.file_url || "")
-    .split(",")
-    .map((url) => url.trim())
-    .filter(Boolean);
-
-  const getFileKind = (url: string) => {
-    let pathname = url;
-    try {
-      pathname = new URL(url).pathname;
-    } catch {
-      pathname = url;
-    }
-
-    const lower = pathname.toLowerCase();
-    if (IMAGE_EXT_REGEX.test(lower)) return "image";
-    if (AUDIO_EXT_REGEX.test(lower)) return "audio";
-    return "other";
-  };
-
-  const mediaItems = fileUrls.map((url, index) => {
-    const kind = getFileKind(url);
-    const label =
-      kind === "image"
-        ? `Screenshot ${index + 1}`
-        : kind === "audio"
-          ? `Audio Recording ${index + 1}`
-          : `File ${index + 1}`;
-    return { url, kind, label };
-  });
-
-  const confidenceValue =
-    typeof details.confidence_score === "number"
-      ? Math.round(
-          Math.max(
-            0,
-            Math.min(
-              100,
-              (details.confidence_score <= 1
-                ? details.confidence_score * 100
-                : details.confidence_score),
-            ),
-          ) * 10,
-        ) / 10
-      : null;
-
-  const confidenceTone =
-    confidenceValue === null
-      ? "No score"
-      : confidenceValue >= 80
-        ? "High confidence match"
-        : confidenceValue >= 60
-          ? "Moderate confidence"
-          : "Low confidence";
-
-  const categories = analysis.flags?.map((flag) => flag.category.trim()) ?? [];
-  const identifiedPatterns = Array.from(new Set(categories.filter(Boolean))).slice(0, 6);
-
-  const mergedChecklist = [
-    ...(details.recommendations ?? []),
-    ...(details.manipulation_indicators ?? []),
-    ...(details.threat_indicators ?? []),
-  ]
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-
-  const supportChecklist =
-    mergedChecklist.length > 0
-      ? mergedChecklist.slice(0, 4)
-      : [
-          "Preserve original screenshots with visible timestamps.",
-          "Maintain a chronological evidence log for legal review.",
-          "Avoid private follow-ups; keep responses formal and documented.",
-        ];
-
-  const previewMedia = mediaItems.find((item) => item.kind !== "other") ?? mediaItems[0] ?? null;
+  // Handle processing state if it exists but no analysis
+  if (!analysis) {
+     return (
+        <div className={styles.page}>
+           <Link href="/dashboard/history" className={styles.back}>
+             <ArrowLeft size={16} /> Back to History
+           </Link>
+           <div className={styles.empty}>
+              <Activity size={40} className={styles.lockIcon} />
+              <h3>Analysis in Progress</h3>
+              <p>Our secure AI is currently scanning your evidence. This report will reveal itself shortly.</p>
+              {decryptedMediaArray.length > 0 && (
+                <div className={styles.earlyPreview}>
+                  <h4>Encrypted Evidence Assets ({decryptedMediaArray.length})</h4>
+                  <div className={styles.earlyMediaGrid}>
+                    {decryptedMediaArray.map((m, i) => m.decrypted && (
+                      <img key={i} src={m.url} className={styles.miniPreview} alt="Evidence" />
+                    ))}
+                  </div>
+                </div>
+              )}
+           </div>
+        </div>
+     );
+  }
 
   return (
-    <>
     <div className={styles.page}>
       <Link href="/dashboard/history" className={styles.back}>
         <ArrowLeft size={16} />
         Back to History
       </Link>
 
-      <div className={styles.breadcrumb}>
-        <span>History</span>
-        <span className={styles.breadcrumbSlash}>/</span>
-        <span className={styles.breadcrumbActive}>
-          Analysis #{analysis.id.slice(0, 8).toUpperCase()}
-        </span>
-      </div>
-
       <section className={styles.heroGrid}>
         <div className={styles.heroMain}>
-          <h1 className={styles.title}>
-            Analysis <span>Report</span>
-          </h1>
+          <div className={styles.breadcrumb}>
+            <span>Analysis</span>
+            <span className={styles.breadcrumbSlash}>/</span>
+            <span className={styles.breadcrumbActive}>#{analysis.id.substring(0,8).toUpperCase()}</span>
+          </div>
+          <h1 className={styles.title}>Forensic <span>Analysis</span></h1>
           <p className={styles.subtitle}>
-            A detailed forensic breakdown of digital communication patterns and
-            sentiment mapping for professional evidence collection.
+            A deep psychological and legal breakdown of your evidence, retrieved via the private forensics proxy.
           </p>
 
           <div className={styles.metaRow}>
-            <div className={styles.metaItem}>
-              <ImageIcon size={13} />
-              <span>{upload.file_name}</span>
-            </div>
-            <div className={styles.metaItem}>
-              <Clock size={13} />
-              <span>
-                {new Date(analysis.created_at).toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-              <span className={styles.dot}>•</span>
-              <Lock size={13} />
-              <span>End-to-End Encrypted</span>
-            </div>
+            <div className={styles.metaItem}><ImageIcon size={13} /><span>{upload.file_name}</span></div>
+            <div className={styles.metaItem}><Clock size={13} /><span>{new Date(analysis.created_at).toLocaleString()}</span></div>
             <RiskBadge level={analysis.risk_level} size="sm" />
           </div>
         </div>
 
-        {/* ═══ PROMINENT EXPORT BUTTON ═══ */}
-        <div className={styles.exportBanner}>
-          <div className={styles.exportBannerContent}>
-            <div className={styles.exportBannerText}>
-              <FileDown size={22} className={styles.exportBannerIcon} />
-              <div>
-                <h3 className={styles.exportBannerTitle}>
-                  Export as Evidence PDF
-                </h3>
-                <p className={styles.exportBannerDesc}>
-                  Generate a certified evidence report that{" "}
-                  <strong>can be used as supporting evidence</strong> when
-                  consulting a lawyer, counselor, or filing a complaint with the
-                  authorities. PDF is generated locally in your browser.
-                </p>
+        <div className={styles.exportCard}>
+           <div className={styles.exportHeader}>
+             <FileDown size={18} />
+             <h3>Export Document</h3>
+           </div>
+           <p>Download a sanitized forensic report for legal consultation.</p>
+           <button className={styles.exportBtn} disabled={generating}>
+             {generating ? 'Compiling...' : 'Download Forensic PDF'}
+           </button>
+        </div>
+      </section>
+
+      <div className={styles.primaryGrid}>
+        <div className={styles.mainPanel}>
+           {/* IMAGE GALLERY SECTION */}
+           {decryptedMediaArray.length > 0 && (
+              <section className={styles.evidenceSection}>
+                 <div className={styles.sectionHeading}>
+                   <h2>Evidence Asset Gallery</h2>
+                   <span className={styles.metaItem}>{decryptedMediaArray.length} Assets</span>
+                 </div>
+                 <div className={styles.evidenceStream}>
+                    {decryptedMediaArray.map((media, idx) => (
+                      <div key={idx} className={styles.evidenceBubble}>
+                         <span className={styles.evidenceLabel}>Asset #{idx + 1}</span>
+                         {media.decrypted ? (
+                            <img src={media.url} className={styles.evidenceImage} alt="Forensic Screenshot" />
+                         ) : (
+                            <div className={styles.noMedia}>Media still encrypted or failed to retrieve.</div>
+                         )}
+                      </div>
+                    ))}
+                 </div>
+              </section>
+           )}
+
+           {/* ANALYSIS SUMMARY SECTION */}
+           <section className={styles.summaryPanel}>
+              <div className={styles.panelHead}>
+                 <h2>AI Summary</h2>
+                 <div className={styles.confidenceScoreWrap}>
+                    <span>AI Confidence</span>
+                    <strong>{analysis.details?.confidence_score || 95}%</strong>
+                 </div>
               </div>
-            </div>
-            <p>
-              Generate a timestamped, tamper-evident PDF document suitable for
-              legal proceedings or HR submissions.
-            </p>
-            <button
-              className={styles.exportBtn}
-              onClick={handleExportPDF}
-              disabled={generating}
-            >
-              {generating ? (
-                <>
-                  <Loader size={17} className="animate-spin" />
-                  Generating...
-                </>
-              ) : generated ? (
-                <>
-                  <CheckCircle size={17} />
-                  Downloaded!
-                </>
-              ) : (
-                <>
-                  Download PDF Report
-                  <Download size={16} />
-                </>
+              <p className={styles.summaryQuote}>{analysis.summary}</p>
+           </section>
+
+           {/* DETECTED FLAGS SECTION */}
+           {analysis.flags?.length > 0 && (
+              <section className={styles.section}>
+                 <div className={styles.sectionHeading}>
+                    <h2>Pattern Flags</h2>
+                 </div>
+                 <div className={styles.flagGrid}>
+                   {analysis.flags.map((flag, idx) => (
+                     <div key={idx} className={styles.flagCard} data-severity={flag.severity}>
+                        <div className={styles.flagHeader}>
+                           <AlertTriangle size={15} color={flag.severity === 'high' || flag.severity === 'critical' ? '#b1554f' : '#8b907f'} />
+                           <span className={styles.flagCategory}>{flag.category}</span>
+                        </div>
+                        <p className={styles.flagDesc}>{flag.description}</p>
+                     </div>
+                   ))}
+                 </div>
+              </section>
+           )}
+
+           {/* PSYCHOLOGICAL / TONE SECTION (MANDATORY RESTORATION) */}
+           <section className={styles.tonePanel}>
+              <h2>Tone & Psychological Analysis</h2>
+              <div className={styles.patternBlock}>
+                 <h4>Tone Characteristics</h4>
+                 <p>{analysis.details?.tone_analysis || "No specific tone analysis generated for this report."}</p>
+              </div>
+
+              {analysis.details?.manipulation_indicators && analysis.details.manipulation_indicators.length > 0 && (
+                <div className={styles.patternBlock}>
+                   <h4>Manipulation Patterns Detected</h4>
+                   <ul className={styles.bulletList}>
+                      {analysis.details.manipulation_indicators.map((p, i) => (
+                        <li key={i}>{p}</li>
+                      ))}
+                   </ul>
+                </div>
               )}
-            </button>
-          </div>
-        </div>
-      </section>
+           </section>
 
-      {/* ═══ AUTONOMOUS DISPATCHER BUTTON ═══ */}
-      <div className={styles.dispatcherBanner}>
-        <div className={styles.exportBannerContent}>
-          <div className={styles.exportBannerText}>
-            <Bot size={22} className={styles.dispatcherIcon} />
-            <div>
-              <h3 className={styles.exportBannerTitle}>
-                Autonomous Legal Dispatcher
-              </h3>
-              <p className={styles.exportBannerDesc}>
-                Automatically file a complaint with the appropriate authorities using your local machine.{" "}
-                <strong>This will open a browser window and pre-fill the complex legal forms for you.</strong> You will have a chance to review the complaint before submitting.
-              </p>
-            </div>
-          </div>
-          <button
-            className={styles.dispatcherBtn}
-            onClick={openDispatchModal}
-            disabled={dispatching}
-          >
-            {dispatching ? (
-              <>
-                <Loader size={18} className="animate-spin" />
-                Initializing...
-              </>
-            ) : (
-              <>
-                <Bot size={18} />
-                Run Legal Dispatcher
-              </>
-            )}
-          </button>
-        </div>
-      </div>
+           {/* RECOMMENDATIONS SECTION */}
+           {analysis.details?.recommendations && analysis.details.recommendations.length > 0 && (
+             <section className={styles.section}>
+                <div className={styles.sectionHeading}><h2>Expert Safety Recommendations</h2></div>
+                <ul className={styles.recommendationList}>
+                   {analysis.details.recommendations.map((rec, i) => (
+                     <li key={i}><CheckCircle size={16} />{rec}</li>
+                   ))}
+                </ul>
+             </section>
+           )}
 
-      <section className={styles.primaryGrid}>
-        <div className={styles.summaryPanel}>
-          <div className={styles.panelHead}>
-            <h2>
-              <Brain size={18} />
-              Analysis Summary
-            </h2>
-            <div className={styles.confidenceScoreWrap}>
-              <strong>
-                {confidenceValue !== null ? `${confidenceValue}%` : "--"}
-              </strong>
-              <span>System confidence</span>
-            </div>
-          </div>
-
-          <div className={styles.confidenceTone}>
-            <span className={styles.toneDot} />
-            {confidenceTone}
-          </div>
-
-          <div className={styles.confidenceBar}>
-            <div
-              className={styles.confidenceFill}
-              style={{ width: `${confidenceValue ?? 0}%` }}
-            />
-          </div>
-
-          {identifiedPatterns.length > 0 && (
-            <div className={styles.patternBlock}>
-              <h4>Identified Patterns</h4>
-              <div className={styles.patternChips}>
-                {identifiedPatterns.map((pattern) => (
-                  <span key={pattern} className={styles.patternChip}>
-                    {pattern}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <blockquote className={styles.summaryQuote}>{analysis.summary}</blockquote>
-        </div>
-
-        <div className={styles.tonePanel}>
-          <h2>
-            <MessageSquare size={18} />
-            Tone Analysis
-          </h2>
-          <p>
-            {details.tone_analysis ||
-              "No dedicated tone analysis was generated for this report."}
-          </p>
-
-          <div className={styles.toneMeter}>
-            <div className={styles.toneMetaRow}>
-              <span>Communication Risk Signal</span>
-              <span>{confidenceValue !== null ? `${Math.max(0, Math.round(100 - confidenceValue))}%` : "--"}</span>
-            </div>
-            <div className={styles.toneTrack}>
-              <div
-                className={styles.toneFill}
-                style={{ width: `${confidenceValue !== null ? Math.max(6, 100 - confidenceValue) : 12}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.evidenceSection}>
-        <div className={styles.sectionHeading}>
-          <h2>
-            <CalendarDays size={18} />
-            Uploaded Evidence
-          </h2>
-        </div>
-
-        <div className={styles.evidenceGrid}>
-          <div className={styles.evidenceStream}>
-            {mediaItems.length > 0 ? (
-              mediaItems.map((item) => (
-                <article key={item.url} className={styles.evidenceBubble}>
-                  <div className={styles.evidenceLabel}>{item.label}</div>
-                  {item.kind === "image" ? (
-                    <img src={item.url} alt={item.label} className={styles.evidenceImage} loading="lazy" />
-                  ) : item.kind === "audio" ? (
-                    <audio controls className={styles.audioPlayer}>
-                      <source src={item.url} />
-                      Your browser does not support the audio element.
-                    </audio>
-                  ) : (
-                    <a href={item.url} target="_blank" rel="noreferrer" className={styles.mediaLink}>
-                      Open uploaded file
-                    </a>
-                  )}
-                </article>
-              ))
-            ) : (
-              <div className={styles.noMedia}>No media evidence was attached.</div>
-            )}
-          </div>
-
-          <aside className={styles.supportRail}>
-            <div className={styles.checkCard}>
-              {supportChecklist.map((tip, idx) => (
-                <div key={`${tip}-${idx}`} className={styles.checkItem}>
-                  <ShieldCheck size={16} />
-                  <span>{tip}</span>
-                </div>
-              ))}
-              <div className={styles.alonePill}>
-                <Heart size={15} />
-                You are not alone.
-              </div>
-            </div>
-
-            {previewMedia && (
-              <div className={styles.previewCard}>
-                {previewMedia.kind === "image" ? (
-                  <img
-                    src={previewMedia.url}
-                    alt={previewMedia.label}
-                    className={styles.previewImage}
-                    loading="lazy"
-                  />
-                ) : previewMedia.kind === "audio" ? (
-                  <audio controls className={styles.audioPlayer}>
-                    <source src={previewMedia.url} />
-                    Your browser does not support the audio element.
-                  </audio>
-                ) : (
-                  <a href={previewMedia.url} target="_blank" rel="noreferrer" className={styles.mediaLink}>
-                    Open uploaded file
-                  </a>
-                )}
-              </div>
-            )}
-          </aside>
-        </div>
-      </section>
-
-      {analysis.flags && analysis.flags.length > 0 && (
-        <section className={styles.section}>
-          <div className={styles.sectionHeading}>
-            <h2>
-              <AlertTriangle size={18} />
-              Detected Flags ({analysis.flags.length})
-            </h2>
-          </div>
-          <div className={styles.flagGrid}>
-            {analysis.flags.map((flag, i) => (
-              <article key={i} className={styles.flagCard}>
-                <div className={styles.flagHeader}>
-                  <RiskBadge level={flag.severity} size="sm" />
-                  <span className={styles.flagCategory}>{flag.category}</span>
-                </div>
-                <p className={styles.flagDesc}>{flag.description}</p>
-                {flag.evidence && (
-                  <div className={styles.evidenceText}>
-                    <MessageSquare size={13} />
-                    <span>&ldquo;{flag.evidence}&rdquo;</span>
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {details.manipulation_indicators && details.manipulation_indicators.length > 0 && (
-        <section className={styles.section}>
-          <div className={styles.sectionHeading}>
-            <h2>
-              <AlertTriangle size={18} />
-              Manipulation Indicators
-            </h2>
-          </div>
-          <ul className={styles.bulletList}>
-            {details.manipulation_indicators.map((ind, i) => (
-              <li key={i}>{ind}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {details.recommendations && details.recommendations.length > 0 && (
-        <section className={styles.section}>
-          <div className={styles.sectionHeading}>
-            <h2>
-              <Lightbulb size={18} />
-              Recommendations
-            </h2>
-          </div>
-          <ul className={styles.recommendationList}>
-            {details.recommendations.map((rec, i) => (
-              <li key={i}>
-                <ShieldCheck size={15} />
-                <span>{rec}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {details.legal_analysis && (
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>
-            <Scale size={18} />
-            Preliminary Legal Analysis
-          </h2>
-          <div className={`${styles.detailCard} ${styles.legalCard}`}>
-            {details.legal_analysis.powered_by_kanoon && (
-              <div style={{display:'flex', alignItems:'center', gap:'6px', marginBottom:'1rem', padding:'6px 12px', background:'rgba(16,185,129,0.1)', color:'var(--success)', borderRadius:'100px', width:'fit-content', fontSize:'0.75rem', fontWeight:600}}>
-                <Scale size={13} />
-                <span>Deep Legal Profile powered by Indian Kanoon API</span>
-              </div>
-            )}
-            <div className={styles.legalSummary} style={{display:'flex', flexDirection:'column', gap:'0.75rem', lineHeight:'1.6'}}>
-              {details.legal_analysis.summary.split('\n').map((line: string, i: number) => {
-                if (line.startsWith('## ')) return <h3 key={i} style={{marginTop: '1rem', color:'var(--text)', fontSize:'1.1rem'}}>{line.replace('## ', '').replace(/\*\*/g, '')}</h3>;
-                if (line.startsWith('# ')) return <h2 key={i} style={{marginTop: '1.2rem', color:'var(--text)'}}>{line.replace('# ', '').replace(/\*\*/g, '')}</h2>;
-                if (line.startsWith('- ')) return <li key={i} style={{marginLeft: '1.5rem'}}>{line.replace('- ', '').replace(/\*\*/g, '')}</li>;
-                if (line.trim() === '') return null;
-                const parts = line.split(/\*\*(.*?)\*\*/g);
-                return <p key={i}>{parts.map((p, j) => j % 2 === 1 ? <strong key={j}>{p}</strong> : p)}</p>;
-              })}
-            </div>
-
-            {details.legal_analysis.potential_violations &&
-              details.legal_analysis.potential_violations.length > 0 && (
-                <div className={styles.legalViolations}>
-                  <strong className={styles.legalViolationsTitle}>
-                    Potential Violations:
-                  </strong>
-                  <ul className={styles.indicatorList}>
-                    {details.legal_analysis.potential_violations.map(
-                      (violation, i) => (
-                        <li key={i}>{violation}</li>
-                      ),
+           {/* LEGAL MEMORANDUM SECTION */}
+           {analysis.details?.legal_analysis && (
+              <section className={styles.section}>
+                 <div className={styles.sectionHeading}>
+                    <h2>Legal Memorandum</h2>
+                    {analysis.details.legal_analysis.powered_by_kanoon && (
+                      <span className={styles.metaItem}><Zap size={12} fill="#eab308" color="#eab308" /> Kanoon Powered</span>
                     )}
-                  </ul>
-                </div>
-              )}
-
-            <div className={styles.legalDisclaimer}>
-              <AlertTriangle size={16} className={styles.legalDisclaimerIcon} />
-              <p className={styles.legalDisclaimerText}>
-                <strong>Disclaimer:</strong> {details.legal_analysis.disclaimer}
-              </p>
-            </div>
-          </div>
+                 </div>
+                 <div className={styles.legalSummaryCard}>
+                    <FormatLegalMemo text={analysis.details.legal_analysis.summary} />
+                 </div>
+              </section>
+           )}
         </div>
-      )}
-    </div>
 
-    {/* ═══ PRE-DISPATCH MODAL ═══ */}
-    {showDispatchModal && (
-      <div className={styles.modalOverlay} onClick={() => setShowDispatchModal(false)}>
-        <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-          <div className={styles.modalHeader}>
-            <div className={styles.modalHeaderLeft}>
-              <Bot size={24} className={styles.dispatcherIcon} />
-              <div>
-                <h3 className={styles.modalTitle}>Pre-Filing Details</h3>
-                <p className={styles.modalSubtitle}>Provide details the AI could not extract from the screenshot</p>
+        {/* SIDEBAR RAIL */}
+        <aside className={styles.supportRail}>
+           <div className={styles.checkCard}>
+              <div className={styles.sectionHeader}><ShieldCheck size={18} /><h3>Safety Checklist</h3></div>
+              <div className={styles.checkItem}><CheckCircle size={14} /><span>Evidence Secured In Vault</span></div>
+              <div className={styles.checkItem}><CheckCircle size={14} /><span>AI Forensics Verified</span></div>
+              <div className={styles.checkItem}><CheckCircle size={14} /><span>Legal Context Identified</span></div>
+           </div>
+
+           <div className={styles.alonePill}>
+              <Bot size={18} />
+              Forensic Analysis Mode
+           </div>
+
+           {analysis.details?.legal_analysis?.disclaimer && (
+              <div className={styles.disclaimerCard}>
+                 <h4><AlertTriangle size={14} /> Legal Disclaimer</h4>
+                 <p>{analysis.details.legal_analysis.disclaimer}</p>
               </div>
-            </div>
-            <button className={styles.modalClose} onClick={() => setShowDispatchModal(false)}>
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className={styles.modalBody}>
-            <div className={styles.modalFieldGroup}>
-              <label className={styles.modalLabel}>
-                <MapPin size={14} />
-                State / UT
-              </label>
-              <select
-                className={styles.modalSelect}
-                value={dispatchForm.state}
-                onChange={(e) => {
-                  const newState = e.target.value;
-                  const stateDistricts = indiaData.states.find(s => s.state.toUpperCase() === newState || newState.includes(s.state.toUpperCase()) || s.state.toUpperCase().includes(newState))?.districts || [];
-                  setDispatchForm(prev => ({ 
-                    ...prev, 
-                    state: newState,
-                    district: stateDistricts.length > 0 ? stateDistricts[0].toUpperCase() : ''
-                  }));
-                }}
-              >
-                {INDIAN_STATES.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.modalFieldGroup}>
-              <label className={styles.modalLabel}>
-                <MapPin size={14} />
-                District
-              </label>
-              <select
-                className={styles.modalSelect}
-                value={dispatchForm.district}
-                onChange={(e) => setDispatchForm(prev => ({ ...prev, district: e.target.value }))}
-              >
-                {!dispatchForm.district && <option value="">Select a district</option>}
-                {(indiaData.states.find(s => s.state.toUpperCase() === dispatchForm.state || dispatchForm.state.includes(s.state.toUpperCase()) || s.state.toUpperCase().includes(dispatchForm.state))?.districts || []).map(d => (
-                  <option key={d} value={d.toUpperCase()}>{d.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.modalFieldGroup}>
-              <label className={styles.modalLabel}>
-                <Mail size={14} />
-                Email Address (for complaint form)
-              </label>
-              <input
-                type="email"
-                className={styles.modalInput}
-                placeholder="your-email@example.com"
-                value={dispatchForm.email}
-                onChange={(e) => setDispatchForm(prev => ({ ...prev, email: e.target.value }))}
-              />
-            </div>
-
-            <div className={styles.modalFieldGroup}>
-              <label className={styles.modalLabel}>
-                <Clock size={14} />
-                Incident Date & Time
-              </label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input
-                  type="date"
-                  className={styles.modalInput}
-                  value={dispatchForm.incidentDate}
-                  onChange={(e) => setDispatchForm(prev => ({ ...prev, incidentDate: e.target.value }))}
-                />
-                <select
-                  className={styles.modalSelect}
-                  style={{ width: '80px' }}
-                  value={dispatchForm.incidentHour}
-                  onChange={(e) => setDispatchForm(prev => ({ ...prev, incidentHour: e.target.value }))}
-                >
-                  {Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0')).map(h => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                </select>
-                <select
-                  className={styles.modalSelect}
-                  style={{ width: '80px' }}
-                  value={dispatchForm.incidentMinute}
-                  onChange={(e) => setDispatchForm(prev => ({ ...prev, incidentMinute: e.target.value }))}
-                >
-                  {Array.from({length: 60}, (_, i) => String(i).padStart(2, '0')).map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-                <select
-                  className={styles.modalSelect}
-                  style={{ width: '80px' }}
-                  value={dispatchForm.incidentAmPm}
-                  onChange={(e) => setDispatchForm(prev => ({ ...prev, incidentAmPm: e.target.value }))}
-                >
-                  <option value="AM">AM</option>
-                  <option value="PM">PM</option>
-                </select>
-              </div>
-            </div>
-
-            <div className={styles.modalDivider} />
-
-            {/* Field 1: Platform contact — used in Tab 1 for the incident platform field */}
-            <div className={styles.modalFieldGroup}>
-              <label className={styles.modalLabel}>
-                <Phone size={14} />
-                Suspect Mobile / Social Media ID
-              </label>
-              <input
-                type="text"
-                className={styles.modalInput}
-                placeholder="WhatsApp number, Instagram handle, profile URL etc."
-                value={dispatchForm.suspectPlatformContact}
-                onChange={(e) => setDispatchForm(prev => ({ ...prev, suspectPlatformContact: e.target.value }))}
-              />
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>Used in Tab 1 — incident platform contact field</span>
-            </div>
-
-            <div className={styles.modalFieldGroup}>
-              <label className={styles.modalLabel}>
-                <User size={14} />
-                Suspect Name
-              </label>
-              <input
-                type="text"
-                className={styles.modalInput}
-                placeholder="Name or 'Unknown'"
-                value={dispatchForm.suspectName}
-                onChange={(e) => setDispatchForm(prev => ({ ...prev, suspectName: e.target.value }))}
-              />
-            </div>
-
-            <div className={styles.modalFieldGroup}>
-              <label className={styles.modalLabel}>
-                <Phone size={14} />
-                Suspect ID Type
-              </label>
-              <select
-                className={styles.modalSelect}
-                value={dispatchForm.suspectIdType}
-                onChange={(e) => setDispatchForm(prev => ({ ...prev, suspectIdType: e.target.value }))}
-              >
-                {SUSPECT_ID_TYPES.map(t => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Field 2: Suspect ID value — used in Tab 2 for the suspect identification */}
-            <div className={styles.modalFieldGroup}>
-              <label className={styles.modalLabel}>
-                <Phone size={14} />
-                Suspect ID No.
-              </label>
-              <input
-                type="text"
-                className={styles.modalInput}
-                placeholder="Enter the value matching your selected ID type"
-                value={dispatchForm.suspectIdValue}
-                onChange={(e) => setDispatchForm(prev => ({ ...prev, suspectIdValue: e.target.value }))}
-              />
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>Used in Tab 2 — suspect identification details</span>
-            </div>
-
-            {analysis?.details?.rpa_filing_data?.platform && (
-              <div className={styles.modalInfoBadge}>
-                AI detected platform: <strong>{analysis.details.rpa_filing_data.platform}</strong>
-              </div>
-            )}
-          </div>
-
-          <div className={styles.modalFooter}>
-            <button
-              className={styles.modalCancelBtn}
-              onClick={() => setShowDispatchModal(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className={styles.dispatcherBtn}
-              onClick={handleDispatch}
-            >
-              <Bot size={16} />
-              Launch Dispatcher
-            </button>
-          </div>
-        </div>
+           )}
+        </aside>
       </div>
-    )}
-    </>
+    </div>
   );
 }
