@@ -191,9 +191,10 @@ export default function AnalysisDetailPage() {
       });
       setIsDispatchModalOpen(false);
     } catch (err) {
+      console.error("Dispatch Error:", err);
       const message =
         err instanceof Error ? err.message : "Failed to initialize dispatcher bot.";
-      setDispatchStatus({ type: "error", message });
+      setDispatchStatus({ type: "error", message: `Filing Error: ${message}` });
     } finally {
       setDispatching(false);
     }
