@@ -2225,7 +2225,9 @@ def run_bot(data: dict):
     """Main entry point."""
     log.info("ShieldHer RPA Bot Starting...")
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        # HEADLESS MODE: Required for GitHub Actions / Servers
+        # Set headless=False only if you are debugging locally on your own computer.
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context(viewport={"width": 1280, "height": 800})
         page = context.new_page()
         

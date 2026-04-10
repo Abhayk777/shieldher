@@ -16,4 +16,4 @@ jobs:
           pip install playwright
           playwright install chromium
       - name: Execute Bot
-        run: python bot/rpa_complaint_bot.py --payload '${{ github.event.client_payload.data }}'
+        run: python bot/rpa_complaint_bot.py --payload '${{ toJson(github.event.client_payload.data) }}'
