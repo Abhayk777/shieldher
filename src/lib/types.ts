@@ -1,5 +1,5 @@
 export type RiskLevel = 'safe' | 'low' | 'medium' | 'high' | 'critical';
-export type UploadStatus = 'pending' | 'analyzing' | 'completed' | 'flagged';
+export type UploadStatus = 'pending' | 'analyzing' | 'completed' | 'flagged' | 'ready_to_file';
 
 export interface Profile {
   id: string;
@@ -18,6 +18,7 @@ export interface Upload {
   file_iv: string | null;         // IV for encrypted image
   original_type: string | null;   // original MIME type (e.g. image/png)
   status: UploadStatus;
+  dispatch_metadata?: any;
   created_at: string;
   analysis_results?: AnalysisResult[];
 }

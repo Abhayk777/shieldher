@@ -1,4 +1,4 @@
-﻿"""
+"""
 ShieldHer RPA Complaint Bot - Production Version v4
 =====================================================
 Fills Tab 1 (Complaint & Incident Details) and Tab 2 (Suspect Details)
@@ -80,21 +80,51 @@ MOCK_DATA = {
 def load_payload() -> dict:
     """Load payload from --payload CLI arg or fall back to MOCK_DATA."""
     parser = argparse.ArgumentParser(description="ShieldHer RPA Complaint Bot")
-    parser.add_argument("--payload", type=str, help="Path to JSON payload file")
+    parser.add_argument("--payload", type=str, help="Path to JSON payload file or raw JSON string")
     args = parser.parse_args()
 
-    if args.payload and os.path.exists(args.payload):
-        log.info(f"Loading payload from: {args.payload}")
-        with open(args.payload, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        log.info(f"Payload loaded for complaint: {data.get('complaint_id', 'unknown')}")
-        return data
-    else:
-        if args.payload:
-            log.warning(f"Payload file not found: {args.payload}, using MOCK_DATA")
+    data = MOCK_DATA
+    if args.payload:
+        if args.payload.strip().startswith("{"):
+            log.info("Loading payload from raw JSON string")
+            try:
+                data = json.loads(args.payload)
+            except Exception as e:
+                log.error(f"Failed to parse raw JSON payload: {e}")
+        elif os.path.exists(args.payload):
+            log.info(f"Loading payload from file: {args.payload}")
+            with open(args.payload, "r", encoding="utf-8") as f:
+                data = json.load(f)
         else:
-            log.info("No --payload argument, using MOCK_DATA for standalone testing")
-        return MOCK_DATA
+            log.warning(f"Payload target not found: {args.payload}, using MOCK_DATA")
+
+    # --- NORMALIZE DATA (Mapping Metadata to Bot Keys) ---
+    # In the new Async architecture, user-verified data is in 'dispatch_metadata'
+    meta = data.get("dispatch_metadata") or {}
+    
+    # Map metadata if present, otherwise keep original keys
+    normalized = {
+        "complaint_id": data.get("id", data.get("complaint_id", "UNKNOWN")),
+        "date": meta.get("user_incident_date", data.get("date", "2026-04-01")),
+        "hour": meta.get("user_incident_hour", data.get("hour", "10")),
+        "minute": meta.get("user_incident_minute", data.get("minute", "30")),
+        "ampm": meta.get("user_incident_ampm", data.get("ampm", "AM")),
+        "state_label": meta.get("user_state", data.get("state_label", "DELHI")),
+        "user_district": meta.get("user_district", data.get("user_district", "")),
+        "email": meta.get("user_email", data.get("email", "anonymous@shieldher.app")),
+        "suspect_name": meta.get("user_suspect_name", data.get("suspect_name", "Unknown Online Perpetrator")),
+        "suspect_platform_contact": meta.get("user_suspect_platform_contact", data.get("suspect_platform_contact", "")),
+        "suspect_id_type": meta.get("user_suspect_id_type", data.get("suspect_id_type", "none")),
+        "suspect_id_value": meta.get("user_suspect_id_value", data.get("suspect_id_value", "")),
+    }
+
+    # Merge remaining original data (Like prompt-generated descriptions, risk levels, etc)
+    for k, v in data.items():
+        if k not in normalized and k != "dispatch_metadata":
+            normalized[k] = v
+            
+    log.info(f"Payload normalized for complaint: {normalized.get('complaint_id')}")
+    return normalized
 
 
 def select_dropdown(page, selector, *, value=None, label=None, index=None, wait_loaded=True, timeout=8000):

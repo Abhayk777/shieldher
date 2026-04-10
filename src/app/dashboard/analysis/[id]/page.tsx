@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { type Upload, type AnalysisFlag, type RiskLevel } from "@/lib/types";
 import { retrieveKey, uint8ArrayToBase64 } from "@/lib/crypto";
+import { createClient } from "@/lib/supabase/client";
 import RiskBadge from "@/components/RiskBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import DispatchModal, { type DispatchFormData } from "@/components/DispatchModal";
@@ -169,39 +170,25 @@ export default function AnalysisDetailPage() {
     setDispatchStatus(null);
 
     try {
-      const evidenceItems = extractEvidenceItems(decryptedMediaArray);
+      const supabase = createClient();
+      
+      // We no longer call /api/dispatch (which fails on Vercel)
+      // Instead, we update the status in Supabase to 'ready_to_file'
+      // This triggers the Supabase Webhook -> Edge Function -> GitHub Action Bot
+      const { error } = await supabase
+        .from('uploads')
+        .update({ 
+          status: 'ready_to_file',
+          dispatch_metadata: formData 
+        })
+        .eq('id', uploadId);
 
-      const payload: Record<string, unknown> = {
-        analysis,
-        upload_id: uploadId,
-        ...formData,
-      };
+      if (error) throw error;
 
-      if (evidenceItems.length > 0) {
-        payload.evidence_items = evidenceItems;
-      }
-
-      const res = await fetch("/api/dispatch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      setDispatchStatus({ 
+        type: "success", 
+        message: "Legal Dispatcher triggered successfully! The background bot is now filing your complaint on the National Cyber Crime Portal. You can check the status on your dashboard shortly." 
       });
-
-      const result = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(
-          typeof result?.error === "string"
-            ? result.error
-            : "Failed to initialize dispatcher bot."
-        );
-      }
-
-      const successMessage =
-        typeof result?.message === "string"
-          ? result.message
-          : "Dispatcher initialized successfully. The RPA bot is now launching.";
-
-      setDispatchStatus({ type: "success", message: successMessage });
       setIsDispatchModalOpen(false);
     } catch (err) {
       const message =
