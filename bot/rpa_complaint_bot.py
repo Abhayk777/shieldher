@@ -24,6 +24,7 @@ import os
 import struct
 import sys
 import zlib
+import requests
 from playwright.sync_api import sync_playwright, TimeoutError
 
 logging.basicConfig(
@@ -116,6 +117,7 @@ def load_payload() -> dict:
         "suspect_platform_contact": meta.get("user_suspect_platform_contact", data.get("suspect_platform_contact", "")),
         "suspect_id_type": meta.get("user_suspect_id_type", data.get("suspect_id_type", "none")),
         "suspect_id_value": meta.get("user_suspect_id_value", data.get("suspect_id_value", "")),
+        "file_url": meta.get("file_url", data.get("file_url")),
     }
 
     # Merge remaining original data (Like prompt-generated descriptions, risk levels, etc)
@@ -125,6 +127,48 @@ def load_payload() -> dict:
             
     log.info(f"Payload normalized for complaint: {normalized.get('complaint_id')}")
     return normalized
+
+
+
+def download_evidence(file_url: str) -> str:
+    """Download evidence from Supabase storage if file_url is provided."""
+    if not file_url:
+        return ""
+
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")
+
+    if not supabase_url or not supabase_key:
+        log.warning("SUPABASE_URL or SUPABASE_SERVICE_KEY not set. Cannot download evidence from Storage.")
+        return ""
+
+    # Construct the authenticated download URL
+    # Bucket name is fixed as 'evidence' in our system
+    bucket = "evidence"
+    clean_path = file_url.replace(f"{bucket}/", "", 1)
+    download_url = f"{supabase_url}/storage/v1/object/authenticated/{bucket}/{clean_path}"
+
+    log.info(f"Downloading evidence from: {download_url}")
+    
+    try:
+        tmp_dir = os.path.join(os.getcwd(), "bot_tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
+        local_filename = os.path.basename(file_url)
+        local_path = os.path.join(tmp_dir, local_filename)
+
+        headers = {"Authorization": f"Bearer {supabase_key}"}
+        response = requests.get(download_url, headers=headers, stream=True)
+        response.raise_for_status()
+
+        with open(local_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        log.info(f"Evidence downloaded successfully to: {local_path}")
+        return local_path
+    except Exception as e:
+        log.error(f"Failed to download evidence: {e}")
+        return ""
 
 
 def select_dropdown(page, selector, *, value=None, label=None, index=None, wait_loaded=True, timeout=8000):
@@ -740,9 +784,11 @@ def _prime_evidence_section(page, data: dict, *, context_label=""):
 def _upload_evidence(page, data: dict):
     """Handle evidence file uploads. Re-fills all upload fields every iteration."""
     evidence_paths = data.get("evidence_paths", [])
+    local_path = data.get("local_evidence_path")
     single_path = data.get("evidence_path")
     all_evidence = []
-    if evidence_paths: all_evidence.extend(evidence_paths)
+    if local_path: all_evidence.append(local_path)
+    elif evidence_paths: all_evidence.extend(evidence_paths)
     elif single_path: all_evidence.append(single_path)
     else: all_evidence.append("dummy_evidence.png")
 
@@ -2223,6 +2269,25 @@ def fill_tab2(page, data: dict) -> bool:
 
 def run_bot(data: dict):
     """Main entry point."""
+    # --- PREPARE EVIDENCE ---
+    log.info("Preparing evidence files...")
+    local_evidence_path = ""
+    if data.get("file_url"):
+        local_evidence_path = download_evidence(data["file_url"])
+    
+    if not local_evidence_path and data.get("evidence_path"):
+        # Fallback to local check (manual upload/mock)
+        if os.path.exists(data["evidence_path"]):
+            local_evidence_path = os.path.abspath(data["evidence_path"])
+        else:
+            log.warning(f"Could not find local evidence_path: {data['evidence_path']}")
+
+    if not local_evidence_path:
+        log.warning("No evidence file ready. Bot will proceed with minimal upload if possible.")
+
+    # Override data for internal use
+    data["local_evidence_path"] = local_evidence_path
+
     log.info("ShieldHer RPA Bot Starting...")
     with sync_playwright() as p:
         # HEADLESS MODE: Required for GitHub Actions / Servers

@@ -179,7 +179,10 @@ export default function AnalysisDetailPage() {
         .from('uploads')
         .update({ 
           status: 'ready_to_file',
-          dispatch_metadata: formData 
+          dispatch_metadata: {
+            ...formData,
+            file_url: upload?.file_url
+          }
         })
         .eq('id', uploadId);
 

@@ -13,7 +13,10 @@ jobs:
         with: { python-version: '3.11' }
       - name: Install dependencies
         run: |
-          pip install playwright
+          pip install playwright requests
           playwright install chromium
       - name: Execute Bot
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python bot/rpa_complaint_bot.py --payload '${{ toJson(github.event.client_payload.data) }}'
