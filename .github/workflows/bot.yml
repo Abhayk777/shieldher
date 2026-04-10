@@ -2,6 +2,7 @@ name: RPA Complaint Bot
 on:
   repository_dispatch:
     types: [new_complaint]
+  workflow_dispatch:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
