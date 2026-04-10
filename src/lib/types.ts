@@ -82,6 +82,8 @@ export interface AnalysisResult {
       summary: string;
       potential_violations: string[];
       disclaimer: string;
+      powered_by_kanoon?: boolean;
+      kanoon_search_keywords?: string;
     };
     rpa_filing_data?: {
       platform?: string;
