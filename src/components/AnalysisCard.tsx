@@ -5,6 +5,7 @@ import RiskBadge from './RiskBadge';
 import { AlertTriangle, Clock, ArrowRight, ShieldAlert, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useLanguage } from './LanguageProvider';
+import { getFriendlyAuthenticityMessage } from '@/lib/mediaAuthenticity';
 import styles from './AnalysisCard.module.css';
 
 interface AnalysisCardProps {

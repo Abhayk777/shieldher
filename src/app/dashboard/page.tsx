@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { type AnalysisResult, type Upload as UploadType } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
+import { getFriendlyAuthenticityMessage } from '@/lib/mediaAuthenticity';
 import Link from 'next/link';
 import { useLanguage } from '@/components/LanguageProvider';
 import styles from './page.module.css';

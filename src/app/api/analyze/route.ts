@@ -5,15 +5,6 @@ import { writeFile, unlink, mkdtemp } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { createClient } from '@/lib/supabase/server';
-import {
-  type MediaAuthenticityItem,
-  type MediaAuthenticityResult,
-  type MediaAuthenticityStatus,
-} from '@/lib/types';
-
-const SIGHTENGINE_API_URL = 'https://api.sightengine.com/1.0/check.json';
-const SIGHTENGINE_API_USER = process.env.SIGHTENGINE_API_USER;
-const SIGHTENGINE_API_SECRET = process.env.SIGHTENGINE_API_SECRET;
 
 type FetchedUploadFile = {
   fileUrl: string;
@@ -90,12 +81,37 @@ function getFileNameFromUrl(fileUrl: string, fallback: string) {
 function getStoragePathFromFileUrl(fileUrl: string, bucket: string) {
   try {
     const pathname = new URL(fileUrl).pathname;
-    const marker = `/object/public/${bucket}/`;
-    const markerIndex = pathname.indexOf(marker);
-    if (markerIndex === -1) return null;
-    const rawPath = pathname.slice(markerIndex + marker.length);
+    // Handle both public and private/authenticated bucket segments in the URL
+    const publicMarker = `/object/public/${bucket}/`;
+    const authMarker = `/object/authenticated/${bucket}/`;
+    
+    let markerIndex = pathname.indexOf(publicMarker);
+    let markerLength = publicMarker.length;
+    
+    if (markerIndex === -1) {
+      markerIndex = pathname.indexOf(authMarker);
+      markerLength = authMarker.length;
+    }
+    
+    if (markerIndex === -1) {
+      // Fallback: try to find the bucket name anywhere in the path after /object/
+      const objectMarker = '/object/';
+      const objIndex = pathname.indexOf(objectMarker);
+      if (objIndex !== -1) {
+        const afterObject = pathname.slice(objIndex + objectMarker.length);
+        const parts = afterObject.split('/');
+        // Assuming structure is type/bucket/path...
+        if (parts.length >= 3 && (parts[0] === 'public' || parts[0] === 'authenticated' || parts[0] === 'sign')) {
+          return decodeURIComponent(parts.slice(2).join('/'));
+        }
+      }
+      return null;
+    }
+    
+    const rawPath = pathname.slice(markerIndex + markerLength);
     return decodeURIComponent(rawPath);
-  } catch {
+  } catch (err) {
+    console.error('Error parsing storage path from URL:', err);
     return null;
   }
 }
@@ -175,6 +191,20 @@ function detectMimeType(fileUrl: string, headerMimeType: string) {
   return 'application/octet-stream';
 }
 
+function normalizeMimeTypeForGemini(mimeType: string, kind: 'image' | 'audio' | 'video' | 'other') {
+  const normalized = mimeType.toLowerCase();
+
+  if (normalized === 'image/jpg') return 'image/jpeg';
+  if (normalized === 'audio/mp3') return 'audio/mpeg';
+  if (normalized === 'audio/x-m4a') return 'audio/mp4';
+
+  if (kind === 'image' && !normalized.startsWith('image/')) return 'image/jpeg';
+  if (kind === 'audio' && !normalized.startsWith('audio/')) return 'audio/mpeg';
+  if (kind === 'video' && !normalized.startsWith('video/')) return 'video/mp4';
+
+  return normalized;
+}
+
 function getMediaKind(mimeType: string, fileName: string): 'image' | 'audio' | 'video' | 'other' {
   if (mimeType.startsWith('image/')) return 'image';
   if (mimeType.startsWith('audio/')) return 'audio';
@@ -185,219 +215,6 @@ function getMediaKind(mimeType: string, fileName: string): 'image' | 'audio' | '
   if (/\.(mp3|wav|m4a|aac|ogg)$/i.test(lower)) return 'audio';
   if (/\.(mp4|webm|mov|avi|mkv|3gp)$/i.test(lower)) return 'video';
   return 'other';
-}
-
-function normalizeProbability(probability: unknown) {
-  if (typeof probability === 'string') {
-    const parsed = Number(probability.trim());
-    if (!Number.isNaN(parsed)) {
-      probability = parsed;
-    }
-  }
-  if (typeof probability !== 'number' || Number.isNaN(probability)) {
-    return undefined;
-  }
-  if (probability <= 1) {
-    return Math.round(probability * 100);
-  }
-  return Math.max(0, Math.min(100, Math.round(probability)));
-}
-
-function getAuthenticityStatus(probability?: number): MediaAuthenticityStatus {
-  if (probability === undefined) return 'inconclusive';
-  if (probability >= 65) return 'ai_generated';
-  if (probability <= 5) return 'likely_human';
-  return 'inconclusive';
-}
-
-function getAuthenticityLabel(status: MediaAuthenticityStatus) {
-  switch (status) {
-    case 'ai_generated':
-      return 'Likely AI-generated';
-    case 'likely_human':
-      return 'Likely authentic';
-    case 'unsupported':
-      return 'Not supported';
-    case 'unavailable':
-      return 'Detector unavailable';
-    default:
-      return 'Could not verify';
-  }
-}
-
-function getAuthenticitySummary(
-  status: MediaAuthenticityStatus,
-  _provider: string,
-  probability?: number,
-) {
-  const probabilityText = probability !== undefined ? `${probability}%` : 'an unknown';
-  switch (status) {
-    case 'ai_generated':
-      return `Estimated ${probabilityText} chance that this media was AI-generated.`;
-    case 'likely_human':
-      return `Estimated only ${probabilityText} chance of AI generation, so this media appears more likely to be authentic.`;
-    case 'unsupported':
-      return 'Audio and video are currently not supported by this AI-authenticity detector.';
-    case 'unavailable':
-      return `Verification is currently unavailable due to API or connectivity issues.`;
-    default:
-      return `Mixed result around ${probabilityText}, so this file could not be verified confidently.`;
-  }
-}
-
-function hasSightengineCredentials() {
-  return Boolean(SIGHTENGINE_API_USER && SIGHTENGINE_API_SECRET);
-}
-
-function parseSightengineProbability(payload: Record<string, unknown>) {
-  const type = (payload.type as Record<string, unknown> | undefined) || {};
-  const genai = (payload.genai as Record<string, unknown> | undefined) || {};
-  return normalizeProbability(
-    type.ai_generated ??
-      type.generated ??
-      genai.ai_generated ??
-      genai.probability ??
-      payload.probability,
-  );
-}
-
-async function callSightengine(body: FormData) {
-  const response = await fetch(SIGHTENGINE_API_URL, { method: 'POST', body });
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(`Sightengine request failed (${response.status})${errorText ? `: ${errorText}` : ''}`);
-  }
-  const payload = (await response.json()) as Record<string, unknown>;
-  if ((payload.status as string | undefined)?.toLowerCase() !== 'success') {
-    throw new Error(`Sightengine returned non-success status: ${String(payload.status ?? 'unknown')}`);
-  }
-  return payload;
-}
-
-async function detectWithSightengine(file: FetchedUploadFile): Promise<MediaAuthenticityItem> {
-  let payload: Record<string, unknown>;
-
-  try {
-    const form = new FormData();
-    form.append('url', file.fileUrl);
-    form.append('models', 'genai');
-    form.append('api_user', SIGHTENGINE_API_USER!);
-    form.append('api_secret', SIGHTENGINE_API_SECRET!);
-    payload = await callSightengine(form);
-  } catch {
-    const form = new FormData();
-    form.append('media', new Blob([file.arrayBuffer], { type: file.mimeType }), file.fileName);
-    form.append('models', 'genai');
-    form.append('api_user', SIGHTENGINE_API_USER!);
-    form.append('api_secret', SIGHTENGINE_API_SECRET!);
-    payload = await callSightengine(form);
-  }
-
-  const aiProbability = parseSightengineProbability(payload);
-  const status = getAuthenticityStatus(aiProbability);
-  const provider = 'Sightengine';
-
-  return {
-    file_name: file.fileName,
-    media_type: file.kind,
-    provider,
-    status,
-    label: getAuthenticityLabel(status),
-    summary: getAuthenticitySummary(status, provider, aiProbability),
-    ai_probability: aiProbability,
-    confidence: aiProbability,
-  };
-}
-
-async function detectMediaAuthenticity(file: FetchedUploadFile): Promise<MediaAuthenticityItem> {
-  const provider = 'Sightengine';
-
-  if (file.kind !== 'image') {
-    return {
-      file_name: file.fileName,
-      media_type: file.kind,
-      provider,
-      status: 'unsupported',
-      label: getAuthenticityLabel('unsupported'),
-      summary: getAuthenticitySummary('unsupported', provider),
-    };
-  }
-
-  if (!hasSightengineCredentials()) {
-    return {
-      file_name: file.fileName,
-      media_type: file.kind,
-      provider,
-      status: 'unavailable',
-      label: getAuthenticityLabel('unavailable'),
-      summary: 'Sightengine credentials are missing on the server.',
-    };
-  }
-
-  try {
-    return await detectWithSightengine(file);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown detector error';
-    console.error('Sightengine detection failed:', message);
-    return {
-      file_name: file.fileName,
-      media_type: file.kind,
-      provider,
-      status: 'unavailable',
-      label: getAuthenticityLabel('unavailable'),
-      summary: `${getAuthenticitySummary('unavailable', provider)} (${message})`,
-    };
-  }
-}
-
-async function buildMediaAuthenticity(files: FetchedUploadFile[]): Promise<MediaAuthenticityResult> {
-  const supportedCount = files.filter((file) => file.kind === 'image').length;
-  const analyzedCount = files.length;
-
-  const items = await Promise.all(
-    files.map(async (file) => await detectMediaAuthenticity(file)),
-  );
-
-  const imageItems = items.filter((item) => item.media_type === 'image');
-  const probabilities = imageItems
-    .map((item) => item.ai_probability)
-    .filter((value): value is number => typeof value === 'number');
-
-  const overallProbability =
-    probabilities.length > 0
-      ? Math.round(probabilities.reduce((sum, value) => sum + value, 0) / probabilities.length)
-      : undefined;
-
-  const overallStatus: MediaAuthenticityStatus = imageItems.some((item) => item.status === 'ai_generated')
-    ? 'ai_generated'
-    : imageItems.length === 0
-      ? items.some((item) => item.status === 'unsupported')
-        ? 'unsupported'
-        : 'unavailable'
-      : imageItems.every((item) => item.status === 'likely_human')
-        ? 'likely_human'
-        : imageItems.some((item) => item.status === 'unavailable')
-          ? 'unavailable'
-          : 'inconclusive';
-
-  const overallProvider = 'Sightengine';
-  let overallSummary = getAuthenticitySummary(overallStatus, overallProvider, overallProbability);
-  const unsupportedCount = analyzedCount - supportedCount;
-  if (unsupportedCount > 0 && supportedCount > 0) {
-    overallSummary += ` ${unsupportedCount} file(s) (audio/video/other) could not be checked for AI generation but were still analyzed for harmful content.`;
-  }
-
-  return {
-    provider: overallProvider,
-    status: overallStatus,
-    label: getAuthenticityLabel(overallStatus),
-    summary: overallSummary,
-    confidence: overallProbability,
-    ai_probability: overallProbability,
-    analyzed_count: analyzedCount,
-    supported_count: supportedCount,
-    items,
-  };
 }
 
 export async function POST(request: NextRequest) {
@@ -433,17 +250,23 @@ export async function POST(request: NextRequest) {
     let result;
     try {
       const fileUrls = upload.file_url
-        .split(',')
+        ?.split(',')
         .map((url: string) => url.trim())
-        .filter((url: string) => url.length > 0);
+        .filter((url: string) => url.length > 0) || [];
+
+      if (fileUrls.length === 0) {
+        throw new Error('No uploaded files were found in this record');
+      }
+
       const fetchedFiles: FetchedUploadFile[] = await Promise.all(
         fileUrls.map(async (fileUrl: string, index: number) => {
           const fetched = await fetchUploadBytes(fileUrl, supabase);
           const arrayBuffer = fetched.arrayBuffer;
           const base64Data = Buffer.from(arrayBuffer).toString('base64');
           const fileName = getFileNameFromUrl(fileUrl, `upload-${index + 1}`);
-          const mimeType = detectMimeType(fileUrl, fetched.contentType);
-          const kind = getMediaKind(mimeType, fileName);
+          const detectedMimeType = detectMimeType(fileUrl, fetched.contentType);
+          const kind = getMediaKind(detectedMimeType, fileName);
+          const mimeType = normalizeMimeTypeForGemini(detectedMimeType, kind);
 
           return {
             fileUrl: fetched.resolvedUrl,
@@ -461,7 +284,6 @@ export async function POST(request: NextRequest) {
         }),
       );
 
-      const mediaAuthenticity = await buildMediaAuthenticity(fetchedFiles);
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       const contentParts: Part[] = [];
@@ -469,6 +291,11 @@ export async function POST(request: NextRequest) {
       const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY!);
 
       for (const file of fetchedFiles) {
+        if (file.kind === 'other') {
+          console.warn(`Skipping unsupported file type for ${file.fileName}: ${file.mimeType}`);
+          continue;
+        }
+
         if (file.kind === 'video') {
           const tempDir = await mkdtemp(join(tmpdir(), 'shieldher-'));
           const tempPath = join(tempDir, file.fileName.replace(/[^a-zA-Z0-9._-]/g, '_'));
@@ -559,18 +386,44 @@ export async function POST(request: NextRequest) {
             }
           }`;
 
-      const aiResponse = await model.generateContent([prompt, ...contentParts]);
-      const text = aiResponse.response.text();
+      if (contentParts.length === 0) {
+        throw new Error('No supported media could be attached for AI analysis');
+      }
+
+      const aiResponse = await model.generateContent({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }, ...contentParts],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.2,
+        },
+      });
+      const text = aiResponse.response.text()?.trim();
+      if (!text) {
+        throw new Error('Gemini returned an empty response');
+      }
       result = parseAnalysisJson(text);
-      result.details = {
-        ...(result.details || {}),
-        media_authenticity: mediaAuthenticity,
-      };
     } catch (aiError: unknown) {
       const errorMessage = aiError instanceof Error ? aiError.message : String(aiError);
-      console.error('Gemini Analysis Failed:', errorMessage);
-      await supabase.from('uploads').update({ status: 'completed' }).eq('id', uploadId);
-      return NextResponse.json({ error: 'AI Analysis failed to process file' }, { status: 500 });
+      console.error('Gemini Analysis Critical Error:', aiError);
+
+      // Keep a valid status value defined by DB constraints.
+      const { error: statusError } = await supabase
+        .from('uploads')
+        .update({ status: 'pending' })
+        .eq('id', uploadId);
+      if (statusError) {
+        console.error('Failed to reset upload status after analysis error:', statusError.message);
+      }
+
+      return NextResponse.json(
+        { error: `AI Analysis failed: ${errorMessage}` },
+        { status: 500 },
+      );
     }
 
     const { data: analysisResult, error: analysisError } = await supabase
@@ -599,8 +452,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, analysis: analysisResult });
   } catch (error: unknown) {
     console.error('API Route Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to process uploads' },
+      { error: `Failed to process uploads: ${errorMessage}` },
       { status: 500 }
     );
   }

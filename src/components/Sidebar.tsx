@@ -13,6 +13,7 @@ import {
   Sun,
   ChevronLeft,
   ChevronRight,
+  MapPin,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -40,6 +41,7 @@ export default function Sidebar() {
     { href: "/dashboard/upload", icon: Upload, label: t.sidebar.nav.upload },
     { href: "/dashboard/history", icon: History, label: t.sidebar.nav.history },
     { href: "/dashboard/downloads", icon: FileDown, label: t.sidebar.nav.downloads },
+    { href: "/map", icon: MapPin, label: "Safety Map" },
     { href: "/dashboard/settings", icon: Settings, label: t.sidebar.nav.settings },
   ];
 

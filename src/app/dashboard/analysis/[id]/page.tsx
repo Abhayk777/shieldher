@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getFriendlyAuthenticityMessage } from "@/lib/mediaAuthenticity";
 import { type Upload, type AnalysisResult } from "@/lib/types";
 import RiskBadge from "@/components/RiskBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
