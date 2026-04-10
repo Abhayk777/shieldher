@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { jsPDF } from 'jspdf';
+import { type MediaAuthenticityStatus } from '@/lib/types';
+import { getFriendlyAuthenticityMessage } from '@/lib/mediaAuthenticity';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,6 +50,25 @@ export async function POST(request: NextRequest) {
     const contentWidth = pageWidth - margin * 2;
     let y = 20;
 
+    // Helper: sanitize text to ASCII-safe characters for jsPDF's default helvetica font
+    const sanitizeText = (text: string): string => {
+      if (!text) return '';
+      return text
+        // Replace common Unicode punctuation with ASCII equivalents
+        .replace(/[\u2018\u2019\u201A]/g, "'")   // smart single quotes
+        .replace(/[\u201C\u201D\u201E]/g, '"')   // smart double quotes
+        .replace(/\u2026/g, '...')               // ellipsis
+        .replace(/[\u2013\u2014]/g, '-')         // en/em dash
+        .replace(/\u2022/g, '-')                 // bullet
+        .replace(/\u2713|\u2714|\u2705/g, '-')   // checkmarks
+        .replace(/\u26A0|\uFE0F/g, '')           // warning sign, variation selector
+        .replace(/[\u00A0]/g, ' ')               // non-breaking space
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')   // zero-width chars
+        // Strip any remaining non-printable or non-Latin1 characters
+        .replace(/[^\x20-\x7E\xA1-\xFF\n\r\t]/g, '')
+        .trim();
+    };
+
     const addPageIfNeeded = (requiredSpace: number) => {
       if (y + requiredSpace > 270) {
         doc.addPage();
@@ -57,7 +78,8 @@ export async function POST(request: NextRequest) {
 
     // Helper to add wrapped text and return new Y
     const addWrappedText = (text: string, x: number, startY: number, maxWidth: number, lineHeight: number): number => {
-      const lines = doc.splitTextToSize(text, maxWidth);
+      const safeText = sanitizeText(text);
+      const lines = doc.splitTextToSize(safeText, maxWidth);
       for (let i = 0; i < lines.length; i++) {
         addPageIfNeeded(lineHeight);
         doc.text(lines[i], x, startY + i * lineHeight);
@@ -175,13 +197,13 @@ export async function POST(request: NextRequest) {
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
-        doc.text((flag.severity || '').toUpperCase(), margin + 14, y + 4.2, { align: 'center' });
+        doc.text(sanitizeText((flag.severity || '').toUpperCase()), margin + 14, y + 4.2, { align: 'center' });
 
         // Category
         doc.setTextColor(10, 37, 64);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text(flag.category || '', margin + 32, y + 4.5);
+        doc.text(sanitizeText(flag.category || ''), margin + 32, y + 4.5);
         y += 9;
 
         // Description
@@ -196,7 +218,7 @@ export async function POST(request: NextRequest) {
         // Evidence
         if (flag.evidence) {
           doc.setFillColor(237, 241, 247);
-          const evidenceLines = doc.splitTextToSize(`"${flag.evidence}"`, contentWidth - 12);
+          const evidenceLines = doc.splitTextToSize(sanitizeText(`"${flag.evidence}"`), contentWidth - 12);
           const evidenceHeight = evidenceLines.length * 4.5 + 4;
           addPageIfNeeded(evidenceHeight);
           doc.roundedRect(margin + 4, y, contentWidth - 8, evidenceHeight, 1.5, 1.5, 'F');
@@ -216,6 +238,69 @@ export async function POST(request: NextRequest) {
 
     // ═══ DETAILS ═══
     const details = analysis.details || {};
+
+    // Media Authenticity
+    const authenticity = details.media_authenticity;
+    if (authenticity && authenticity.supported_count > 0) {
+      addPageIfNeeded(24);
+      doc.setTextColor(10, 37, 64);
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Media Authenticity Check', margin, y);
+      y += 8;
+
+      const statusColorMap: Record<MediaAuthenticityStatus, [number, number, number]> = {
+        ai_generated: [239, 68, 68],
+        likely_human: [0, 166, 124],
+        inconclusive: [245, 158, 11],
+        unsupported: [100, 116, 139],
+        unavailable: [100, 116, 139],
+      };
+      const badgeColor = statusColorMap[authenticity.status as MediaAuthenticityStatus] || [100, 116, 139];
+      doc.setFillColor(...badgeColor);
+      doc.roundedRect(margin, y, 48, 7, 2, 2, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text(sanitizeText((authenticity.label || 'UNKNOWN').toUpperCase()), margin + 24, y + 4.8, { align: 'center' });
+
+      if (typeof authenticity.ai_probability === 'number') {
+        doc.setTextColor(66, 84, 102);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`AI likelihood: ${authenticity.ai_probability}%`, pageWidth - margin, y + 4.8, { align: 'right' });
+      }
+      y += 11;
+
+      doc.setTextColor(66, 84, 102);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      y = addWrappedText(
+        getFriendlyAuthenticityMessage(authenticity.status as MediaAuthenticityStatus),
+        margin,
+        y,
+        contentWidth,
+        5
+      );
+      y += 4;
+
+      if (authenticity.items && authenticity.items.length > 0) {
+        doc.setTextColor(66, 84, 102);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        for (const item of authenticity.items) {
+          addPageIfNeeded(8);
+          const line = `${item.file_name}: ${item.label}`;
+          const lineParts = doc.splitTextToSize(sanitizeText(`- ${line}`), contentWidth - 4);
+          for (let i = 0; i < lineParts.length; i++) {
+            addPageIfNeeded(5);
+            doc.text(lineParts[i], margin + 4, y + i * 4.5);
+          }
+          y += lineParts.length * 4.5 + 1;
+        }
+      }
+      y += 6;
+    }
 
     // Tone Analysis
     if (details.tone_analysis) {
@@ -245,7 +330,7 @@ export async function POST(request: NextRequest) {
       doc.setFont('helvetica', 'normal');
       for (const indicator of details.manipulation_indicators) {
         addPageIfNeeded(6);
-        doc.text(`• ${indicator}`, margin + 4, y);
+        doc.text(sanitizeText(`- ${indicator}`), margin + 4, y);
         y += 5;
       }
       y += 4;
@@ -264,7 +349,7 @@ export async function POST(request: NextRequest) {
       doc.setFont('helvetica', 'normal');
       for (const rec of details.recommendations) {
         addPageIfNeeded(10);
-        const recLines = doc.splitTextToSize(`✓ ${rec}`, contentWidth - 4);
+        const recLines = doc.splitTextToSize(sanitizeText(`- ${rec}`), contentWidth - 4);
         for (let i = 0; i < recLines.length; i++) {
           addPageIfNeeded(5);
           doc.text(recLines[i], margin + 4, y + i * 4.5);
@@ -299,9 +384,12 @@ export async function POST(request: NextRequest) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         for (const violation of details.legal_analysis.potential_violations) {
-          addPageIfNeeded(6);
-          doc.text(`• ${violation}`, margin + 4, y);
-          y += 5;
+          const violationLines = doc.splitTextToSize(sanitizeText(`- ${violation}`), contentWidth - 4);
+          for (let i = 0; i < violationLines.length; i++) {
+            addPageIfNeeded(5);
+            doc.text(violationLines[i], margin + 4, y + i * 4.5);
+          }
+          y += violationLines.length * 4.5 + 0.5;
         }
         y += 4;
       }
@@ -311,13 +399,13 @@ export async function POST(request: NextRequest) {
         addPageIfNeeded(20);
         doc.setFillColor(254, 242, 242);
         doc.setDrawColor(239, 68, 68);
-        const disclaimerLines = doc.splitTextToSize(details.legal_analysis.disclaimer, contentWidth - 16);
+        const disclaimerLines = doc.splitTextToSize(sanitizeText(details.legal_analysis.disclaimer), contentWidth - 16);
         const disclaimerHeight = disclaimerLines.length * 4.5 + 8;
         doc.roundedRect(margin, y, contentWidth, disclaimerHeight, 2, 2, 'FD');
         doc.setTextColor(180, 40, 40);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
-        doc.text('⚠ LEGAL DISCLAIMER', margin + 6, y + 5);
+        doc.text('[!] LEGAL DISCLAIMER', margin + 6, y + 5);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         for (let i = 0; i < disclaimerLines.length; i++) {

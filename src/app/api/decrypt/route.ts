@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { decryptBuffer, decryptText } from '@/lib/crypto-server';
+
+export async function POST(request: NextRequest) {
+  try {
+    const { uploadId, masterKey } = await request.json();
+
+    if (!uploadId || !masterKey) {
+      return NextResponse.json({ error: 'Upload ID and Master Key are required' }, { status: 400 });
+    }
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // 1. Fetch upload record (always exist if id is valid)
+    const { data: upload, error: uploadError } = await supabase
+      .from('uploads')
+      .select('*')
+      .eq('id', uploadId)
+      .single();
+
+    if (uploadError || !upload) {
+      return NextResponse.json({ error: 'Upload not found' }, { status: 404 });
+    }
+
+    if (upload.user_id !== user.id) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    // 2. Fetch analysis results (might not exist yet)
+    const { data: analysis } = await supabase
+      .from('analysis_results')
+      .select('*')
+      .eq('upload_id', uploadId)
+      .single();
+
+    // 3. Decrypt analysis fields
+    let decryptedAnalysis = null;
+    if (analysis) {
+      let summary = analysis.summary;
+      let flags = analysis.flags;
+      let details = analysis.details;
+
+      if (analysis.encrypted_summary) {
+        try {
+          const iv = analysis.encryption_iv;
+          summary = decryptText(analysis.encrypted_summary, masterKey, iv);
+          const flagsJson = decryptText(analysis.encrypted_flags, masterKey, iv);
+          const detailsJson = decryptText(analysis.encrypted_details, masterKey, iv);
+          
+          flags = flagsJson ? JSON.parse(flagsJson) : (analysis.flags || []);
+          details = detailsJson ? JSON.parse(detailsJson) : (analysis.details || {});
+        } catch (e) {
+          console.error('[DecryptProxy] Text decryption failed:', e);
+        }
+      }
+
+      decryptedAnalysis = {
+        ...analysis,
+        summary,
+        flags,
+        details,
+      };
+    }
+
+    // 4. Decrypt Media (Support multiple files via commas)
+    const fileUrls = (upload.file_url || '').split(',').filter(Boolean);
+    const fileIVs = (upload.file_iv || '').split(',').filter(Boolean);
+    const fileTypes = (upload.original_type || '').split(',').filter(Boolean);
+    
+    const decryptedMediaArray = await Promise.all(fileUrls.map(async (url: string, idx: number) => {
+      try {
+        const iv = fileIVs[idx];
+        if (!iv) return { url, decrypted: false }; // Already public or no IV
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch from storage');
+        
+        const encryptedBuffer = Buffer.from(await res.arrayBuffer());
+        const decryptedBuffer = decryptBuffer(encryptedBuffer, masterKey, iv);
+        
+        const mimeType = fileTypes[idx] || 'image/png';
+        return {
+          url: `data:${mimeType};base64,${decryptedBuffer.toString('base64')}`,
+          decrypted: true
+        };
+      } catch (e) {
+        console.error(`[DecryptProxy] Media decryption failed for asset ${idx}:`, e);
+        return { url, decrypted: false };
+      }
+    }));
+
+    return NextResponse.json({
+      success: true,
+      analysis: decryptedAnalysis,
+      upload: upload,
+      decryptedMedia: decryptedMediaArray[0]?.url || null, // Primary for legacy UI
+      decryptedMediaArray, // All media for modern UI
+    });
+
+  } catch (error: any) {
+    console.error('[DecryptProxy] Error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
