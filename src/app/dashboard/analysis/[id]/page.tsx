@@ -190,10 +190,18 @@ export default function AnalysisDetailPage() {
         message: "Legal Dispatcher triggered successfully! The background bot is now filing your complaint on the National Cyber Crime Portal. You can check the status on your dashboard shortly." 
       });
       setIsDispatchModalOpen(false);
-    } catch (err) {
-      console.error("Dispatch Error:", err);
-      const message =
-        err instanceof Error ? err.message : "Failed to initialize dispatcher bot.";
+    } catch (err: any) {
+      console.error("Full Dispatch Error Object:", err);
+      let message = "Unknown error";
+      
+      if (err instanceof Error) {
+        message = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        message = err.message || err.details || JSON.stringify(err);
+      } else {
+        message = String(err);
+      }
+
       setDispatchStatus({ type: "error", message: `Filing Error: ${message}` });
     } finally {
       setDispatching(false);
