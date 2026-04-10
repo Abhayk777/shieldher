@@ -1366,3 +1366,417 @@ Call log:
   -   - waiting for fonts to load...
   -   - fonts loaded
 
+
+--- Dispatch Triggered at 2026-04-10T16:55:32.022Z ---
+CWD: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher
+Bot Dir: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot
+Python: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Scripts\python.exe
+Script: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_complaint_bot.py
+Payload: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_tmp\payload_1775840132020.json
+
+2026-04-10 22:25:33,225 - INFO - Loading payload from: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_tmp\payload_1775840132020.json
+2026-04-10 22:25:33,226 - INFO - Payload loaded for complaint: e8f2a437-d76e-45c0-9ec8-faa2f6dc42d1
+2026-04-10 22:25:33,226 - INFO - ShieldHer RPA Bot Starting...
+2026-04-10 22:25:44,838 - INFO - === TAB 1: Complaint & Incident Details ===
+2026-04-10 22:25:44,838 - INFO - Step 1: Category -> 'Women/Children Related Crime'
+2026-04-10 22:25:44,838 - INFO - Selecting #ContentPlaceHolder1_ddl_CategoryCrime: value=14, label=Women/Children Related Crime, index=3
+2026-04-10 22:25:44,877 - INFO -   -> Selected by value='14'
+2026-04-10 22:25:46,904 - INFO - Step 2: Date -> 2026-04-10
+2026-04-10 22:25:46,926 - INFO - Step 3: Time
+2026-04-10 22:25:46,955 - INFO - Step 4: Delay reason
+2026-04-10 22:25:46,968 - INFO - Step 5: State -> 'GUJARAT'
+2026-04-10 22:25:46,969 - INFO - Selecting #ContentPlaceHolder1_ddl_State: value=None, label=GUJARAT, index=10
+2026-04-10 22:25:46,998 - INFO -   -> Selected by exact label='GUJARAT'
+2026-04-10 22:25:47,005 - INFO - Waiting for District dropdown to populate...
+2026-04-10 22:25:47,449 - INFO - District dropdown populated.
+2026-04-10 22:25:47,449 - INFO - Step 6: District -> label='Jamnagar', index=1
+2026-04-10 22:25:47,449 - INFO - Selecting #ContentPlaceHolder1_ddl_District: value=None, label=Jamnagar, index=1
+2026-04-10 22:26:17,615 - INFO -   -> Fuzzy match: 'JAMNAGAR'
+2026-04-10 22:26:17,615 - INFO - Step 7: Information Source -> 'WhatsApp'
+2026-04-10 22:26:17,615 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 22:26:17,640 - INFO -   -> Selected by value='9'
+2026-04-10 22:26:19,149 - INFO - Target value to fill in dynamic fields: '9876765463'
+2026-04-10 22:26:19,149 - INFO - Scanning for dynamic input fields for platform whatsapp...
+2026-04-10 22:26:20,270 - INFO -   -> MATCH FOUND for exact selector: #ContentPlaceHolder1_txt_Info
+2026-04-10 22:26:20,950 - INFO -   -> Successfully filled via exact selector.
+2026-04-10 22:26:20,950 - INFO - Step 8: Uploading 1 evidence files...
+2026-04-10 22:26:20,956 - INFO -   [1/1] Uploading evidence_batch_e8f2a437-d76e-45c0-9ec8-faa2f6dc42d1_0_1775840132018.jpg (rows before: 0)
+2026-04-10 22:26:20,956 - INFO - [1/1] -> Re-selecting information source: WhatsApp
+2026-04-10 22:26:20,956 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 22:26:20,973 - INFO -   -> Selected by value='9'
+2026-04-10 22:26:24,012 - INFO -     -> File selected via #ContentPlaceHolder1_fu_info: name='evidence_batch_e8f2a437-d76e-45c0-9ec8-faa2f6dc42d1_0_1775840132018.jpg', value='C:\fakepath\evidence_batch_e8f2a437-d76e-45c0-9ec8-faa2f6dc42d1_0_1775840132018.jpg'
+2026-04-10 22:26:24,016 - INFO -     -> Pre-ADD file state: len=1 name='evidence_batch_e8f2a437-d76e-45c0-9ec8-faa2f6dc42d1_0_1775840132018.jpg' value='C:\fakepath\evidence_batch_e8f2a437-d76e-45c0-9ec8-faa2f6dc42d1_0_1775840132018.jpg'
+2026-04-10 22:26:36,457 - WARNING -     -> Could not confirm filename in evidence table for evidence_batch_e8f2a437-d76e-45c0-9ec8-faa2f6dc42d1_0_1775840132018.jpg
+2026-04-10 22:26:36,846 - INFO - [final] -> Re-selecting information source: WhatsApp
+2026-04-10 22:26:36,846 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 22:26:36,867 - INFO -   -> Selected by value='9'
+2026-04-10 22:26:39,498 - INFO - [post-upload] -> Re-selecting information source: WhatsApp
+2026-04-10 22:26:39,498 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 22:26:39,517 - INFO -   -> Selected by value='9'
+2026-04-10 22:26:42,146 - INFO - Step 9: Additional info (1180 chars)
+2026-04-10 22:26:42,345 - INFO - Clicking SAVE & NEXT...
+2026-04-10 22:26:46,462 - INFO - ADVANCEMENT SUCCESS: On Tab 2.
+2026-04-10 22:26:46,462 - INFO - === TAB 2: Suspect Details ===
+2026-04-10 22:26:47,496 - INFO - FIX 1: Scraped 14 ID Type dropdown options:
+2026-04-10 22:26:47,496 - INFO -   [0] value='0' label='---Select---'
+2026-04-10 22:26:47,496 - INFO -   [1] value='1' label='Driving License'
+2026-04-10 22:26:47,497 - INFO -   [2] value='2' label='Email'
+2026-04-10 22:26:47,497 - INFO -   [3] value='3' label='Gov. Issued Card'
+2026-04-10 22:26:47,497 - INFO -   [4] value='4' label='Mobile Number'
+2026-04-10 22:26:47,497 - INFO -   [5] value='5' label='PAN Card'
+2026-04-10 22:26:47,497 - INFO -   [6] value='6' label='Voter Card'
+2026-04-10 22:26:47,497 - INFO -   [7] value='7' label='Other'
+2026-04-10 22:26:47,497 - INFO -   [8] value='8' label='Social Media Profile URL'
+2026-04-10 22:26:47,497 - INFO -   [9] value='9' label='Landline Call'
+2026-04-10 22:26:47,497 - INFO -   [10] value='10' label='International Call'
+2026-04-10 22:26:47,497 - INFO -   [11] value='11' label='WhatsApp Call'
+2026-04-10 22:26:47,497 - INFO -   [12] value='22' label='Bank Account Number'
+2026-04-10 22:26:47,497 - INFO -   [13] value='23' label='URL'
+2026-04-10 22:26:47,497 - INFO - Filling suspect name: Ayush
+2026-04-10 22:26:47,544 - INFO - FIX 2: User ID Type='Mobile Number' | FIX 4: ID Value='9876765463'
+2026-04-10 22:26:47,544 - INFO - FIX 2: Matched -> value='4' label='Mobile Number'
+2026-04-10 22:26:47,554 - INFO - FIX 2: Selected by value='4'
+2026-04-10 22:26:49,078 - INFO - FIX 3: Phone-type ID detected ('Mobile Number'), handling phone selector flow...
+2026-04-10 22:26:49,119 - INFO - FIX 3: Ticked phone selector 'Mobile No' via label[for]
+2026-04-10 22:26:50,637 - INFO - FIX 3: Selecting INDIA (+91) country code...
+2026-04-10 22:27:50,696 - WARNING - FIX 3: Country code selection error: Locator.select_option: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("select:visible").nth(1)
+  -     - locator resolved to <select disabled="disabled" class="aspNetDisabled form-select" id="ContentPlaceHolder1_ddl_Councode" name="ctl00$ContentPlaceHolder1$ddl_Councode" title="Provide suspect's country code if known to you">…</select>
+  -   - attempting select option action
+  -     2 × waiting for element to be visible and enabled
+  -       - element is not enabled
+  -     - retrying select option action
+  -     - waiting 20ms
+  -     2 × waiting for element to be visible and enabled
+  -       - element is not enabled
+  -     - retrying select option action
+  -       - waiting 100ms
+  -     59 × waiting for element to be visible and enabled
+  -        - element is not enabled
+  -      - retrying select option action
+  -        - waiting 500ms
+
+2026-04-10 22:27:50,696 - INFO - FIX 3: Filling phone number: 9876765463
+2026-04-10 22:27:51,394 - INFO - FIX 3: Filled phone into #ContentPlaceHolder1_txt_IdNo
+2026-04-10 22:27:51,394 - INFO - FIX 3: Suspect ADD attempt 1/3
+2026-04-10 22:27:51,423 - WARNING - FIX 4: Inline row ID value fill did not confirm: {'ok': False, 'reason': 'no_target_input'}
+2026-04-10 22:27:51,628 - INFO - FIX 4: Verified ID value present near ADD (field='ContentPlaceHolder1_txt_IdNo')
+2026-04-10 22:27:51,633 - INFO - FIX 3: Tab2 grid signature before ADD (attempt 1): {'ok': True, 'tableCount': 0, 'rowsTotal': 0, 'nameHits': 0, 'idHits': 0}
+2026-04-10 22:27:51,702 - INFO - FIX 3: Tab2 ADD clicked via REAL click selector '#ContentPlaceHolder1_btnAddSuspect:visible'
+2026-04-10 22:27:54,140 - INFO - FIX 3: Tab2 grid signature after ADD (attempt 1): {'ok': True, 'tableCount': 1, 'rowsTotal': 2, 'nameHits': 1, 'idHits': 1}
+2026-04-10 22:27:54,146 - INFO - FIX 3: Suspect ADD confirmed (sig=True, row=True).
+2026-04-10 22:27:54,175 - INFO - Tab2 additional info filled via textarea fallback id='txt_AnyOtherDetails' len=83
+2026-04-10 22:27:54,392 - INFO - Clicking Preview & Next button on Tab 2...
+2026-04-10 22:27:54,694 - INFO -   -> Clicked via value-based selector
+2026-04-10 22:27:58,851 - INFO - ADVANCEMENT SUCCESS: On Tab 3 (Preview & Submit).
+2026-04-10 22:27:58,851 - INFO - RPA Halted on Tab 3 for review.
+2026-04-10 22:28:11,572 - ERROR - Bot error: Page.wait_for_timeout: Target page, context or browser has been closed
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_complaint_bot.py", line 2236, in <module>
+    run_bot(payload)
+    ~~~~~~~^^^^^^^^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_complaint_bot.py", line 2230, in run_bot
+    page.screenshot(path="bot_error.png")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\sync_api\_generated.py", line 9778, in screenshot
+    self._sync(
+    ~~~~~~~~~~^
+        self._impl_obj.screenshot(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<13 lines>...
+        )
+        ^
+    )
+    ^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_page.py", line 789, in screenshot
+    encoded_binary = await self._channel.send("screenshot", params)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 61, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 528, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TargetClosedError: Page.screenshot: Target page, context or browser has been closed
+
+--- Dispatch Triggered at 2026-04-10T17:23:17.031Z ---
+CWD: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher
+Bot Dir: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot
+Python: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Scripts\python.exe
+Script: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_complaint_bot.py
+Payload: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_tmp\payload_1775841797030.json
+
+2026-04-10 22:53:18,072 - INFO - Loading payload from: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_tmp\payload_1775841797030.json
+2026-04-10 22:53:18,072 - INFO - Payload loaded for complaint: ca26afaa-c3af-4fb5-bfbe-f5efed3336db
+2026-04-10 22:53:18,072 - INFO - ShieldHer RPA Bot Starting...
+2026-04-10 22:53:50,603 - INFO - === TAB 1: Complaint & Incident Details ===
+2026-04-10 22:53:50,603 - INFO - Step 1: Category -> 'Women/Children Related Crime'
+2026-04-10 22:53:50,603 - INFO - Selecting #ContentPlaceHolder1_ddl_CategoryCrime: value=14, label=Women/Children Related Crime, index=3
+2026-04-10 22:53:50,639 - INFO -   -> Selected by value='14'
+2026-04-10 22:53:52,653 - INFO - Step 2: Date -> 2026-04-10
+2026-04-10 22:53:52,675 - INFO - Step 3: Time
+2026-04-10 22:53:52,703 - INFO - Step 4: Delay reason
+2026-04-10 22:53:52,718 - INFO - Step 5: State -> 'HIMACHAL PRADESH'
+2026-04-10 22:53:52,718 - INFO - Selecting #ContentPlaceHolder1_ddl_State: value=None, label=HIMACHAL PRADESH, index=12
+2026-04-10 22:53:52,747 - INFO -   -> Selected by exact label='HIMACHAL PRADESH'
+2026-04-10 22:53:52,755 - INFO - Waiting for District dropdown to populate...
+2026-04-10 22:53:53,086 - INFO - District dropdown populated.
+2026-04-10 22:53:53,087 - INFO - Step 6: District -> label='Kinnaur', index=1
+2026-04-10 22:53:53,087 - INFO - Selecting #ContentPlaceHolder1_ddl_District: value=None, label=Kinnaur, index=1
+2026-04-10 22:54:23,178 - INFO -   -> Fuzzy match: 'KINNAUR'
+2026-04-10 22:54:23,178 - INFO - Step 7: Information Source -> 'WhatsApp'
+2026-04-10 22:54:23,178 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 22:54:23,205 - INFO -   -> Selected by value='9'
+2026-04-10 22:54:24,725 - INFO - Target value to fill in dynamic fields: '9865334567'
+2026-04-10 22:54:24,725 - INFO - Scanning for dynamic input fields for platform whatsapp...
+2026-04-10 22:54:25,850 - INFO -   -> MATCH FOUND for exact selector: #ContentPlaceHolder1_txt_Info
+2026-04-10 22:54:26,583 - INFO -   -> Successfully filled via exact selector.
+2026-04-10 22:54:26,583 - INFO - Step 8: Uploading 1 evidence files...
+2026-04-10 22:54:26,588 - INFO -   [1/1] Uploading evidence_batch_ca26afaa-c3af-4fb5-bfbe-f5efed3336db_0_1775841797028.jpg (rows before: 0)
+2026-04-10 22:54:26,588 - INFO - [1/1] -> Re-selecting information source: WhatsApp
+2026-04-10 22:54:26,588 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 22:54:26,605 - INFO -   -> Selected by value='9'
+2026-04-10 22:54:29,648 - INFO -     -> File selected via #ContentPlaceHolder1_fu_info: name='evidence_batch_ca26afaa-c3af-4fb5-bfbe-f5efed3336db_0_1775841797028.jpg', value='C:\fakepath\evidence_batch_ca26afaa-c3af-4fb5-bfbe-f5efed3336db_0_1775841797028.jpg'
+2026-04-10 22:54:29,651 - INFO -     -> Pre-ADD file state: len=1 name='evidence_batch_ca26afaa-c3af-4fb5-bfbe-f5efed3336db_0_1775841797028.jpg' value='C:\fakepath\evidence_batch_ca26afaa-c3af-4fb5-bfbe-f5efed3336db_0_1775841797028.jpg'
+2026-04-10 22:54:41,796 - WARNING -     -> Could not confirm filename in evidence table for evidence_batch_ca26afaa-c3af-4fb5-bfbe-f5efed3336db_0_1775841797028.jpg
+2026-04-10 22:54:42,081 - INFO - [final] -> Re-selecting information source: WhatsApp
+2026-04-10 22:54:42,082 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 22:54:42,099 - INFO -   -> Selected by value='9'
+2026-04-10 22:54:44,741 - INFO - [post-upload] -> Re-selecting information source: WhatsApp
+2026-04-10 22:54:44,742 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 22:54:44,757 - INFO -   -> Selected by value='9'
+2026-04-10 22:54:47,391 - INFO - Step 9: Additional info (1490 chars)
+2026-04-10 22:54:47,623 - INFO - Clicking SAVE & NEXT...
+2026-04-10 22:54:51,754 - INFO - ADVANCEMENT SUCCESS: On Tab 2.
+2026-04-10 22:54:51,754 - INFO - === TAB 2: Suspect Details ===
+2026-04-10 22:54:52,795 - INFO - FIX 1: Scraped 14 ID Type dropdown options:
+2026-04-10 22:54:52,795 - INFO -   [0] value='0' label='---Select---'
+2026-04-10 22:54:52,795 - INFO -   [1] value='1' label='Driving License'
+2026-04-10 22:54:52,795 - INFO -   [2] value='2' label='Email'
+2026-04-10 22:54:52,795 - INFO -   [3] value='3' label='Gov. Issued Card'
+2026-04-10 22:54:52,795 - INFO -   [4] value='4' label='Mobile Number'
+2026-04-10 22:54:52,795 - INFO -   [5] value='5' label='PAN Card'
+2026-04-10 22:54:52,795 - INFO -   [6] value='6' label='Voter Card'
+2026-04-10 22:54:52,795 - INFO -   [7] value='7' label='Other'
+2026-04-10 22:54:52,795 - INFO -   [8] value='8' label='Social Media Profile URL'
+2026-04-10 22:54:52,795 - INFO -   [9] value='9' label='Landline Call'
+2026-04-10 22:54:52,795 - INFO -   [10] value='10' label='International Call'
+2026-04-10 22:54:52,795 - INFO -   [11] value='11' label='WhatsApp Call'
+2026-04-10 22:54:52,795 - INFO -   [12] value='22' label='Bank Account Number'
+2026-04-10 22:54:52,795 - INFO -   [13] value='23' label='URL'
+2026-04-10 22:54:52,795 - INFO - Filling suspect name: Ayush
+2026-04-10 22:54:52,842 - INFO - FIX 2: User ID Type='Mobile Number' | FIX 4: ID Value='9865334567'
+2026-04-10 22:54:52,843 - INFO - FIX 2: Matched -> value='4' label='Mobile Number'
+2026-04-10 22:54:52,855 - INFO - FIX 2: Selected by value='4'
+2026-04-10 22:54:54,373 - INFO - FIX 3: Phone-type ID detected ('Mobile Number'), handling phone selector flow...
+2026-04-10 22:54:54,409 - INFO - FIX 3: Ticked phone selector 'Mobile No' via label[for]
+2026-04-10 22:54:55,931 - INFO - FIX 3: Selecting INDIA (+91) country code...
+2026-04-10 22:55:55,977 - WARNING - FIX 3: Country code selection error: Locator.select_option: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("select:visible").nth(1)
+  -     - locator resolved to <select disabled="disabled" class="aspNetDisabled form-select" id="ContentPlaceHolder1_ddl_Councode" name="ctl00$ContentPlaceHolder1$ddl_Councode" title="Provide suspect's country code if known to you">…</select>
+  -   - attempting select option action
+  -     2 × waiting for element to be visible and enabled
+  -       - element is not enabled
+  -     - retrying select option action
+  -     - waiting 20ms
+  -     2 × waiting for element to be visible and enabled
+  -       - element is not enabled
+  -     - retrying select option action
+  -       - waiting 100ms
+  -     59 × waiting for element to be visible and enabled
+  -        - element is not enabled
+  -      - retrying select option action
+  -        - waiting 500ms
+
+2026-04-10 22:55:55,977 - INFO - FIX 3: Filling phone number: 9865334567
+2026-04-10 22:55:56,679 - INFO - FIX 3: Filled phone into #ContentPlaceHolder1_txt_IdNo
+2026-04-10 22:55:56,679 - INFO - FIX 3: Suspect ADD attempt 1/3
+2026-04-10 22:55:56,709 - WARNING - FIX 4: Inline row ID value fill did not confirm: {'ok': False, 'reason': 'no_target_input'}
+2026-04-10 22:55:56,911 - INFO - FIX 4: Verified ID value present near ADD (field='ContentPlaceHolder1_txt_IdNo')
+2026-04-10 22:55:56,915 - INFO - FIX 3: Tab2 grid signature before ADD (attempt 1): {'ok': True, 'tableCount': 0, 'rowsTotal': 0, 'nameHits': 0, 'idHits': 0}
+2026-04-10 22:55:56,981 - INFO - FIX 3: Tab2 ADD clicked via REAL click selector '#ContentPlaceHolder1_btnAddSuspect:visible'
+2026-04-10 22:55:59,410 - INFO - FIX 3: Tab2 grid signature after ADD (attempt 1): {'ok': True, 'tableCount': 1, 'rowsTotal': 2, 'nameHits': 1, 'idHits': 1}
+2026-04-10 22:55:59,415 - INFO - FIX 3: Suspect ADD confirmed (sig=True, row=True).
+2026-04-10 22:55:59,442 - INFO - Tab2 additional info filled via textarea fallback id='txt_AnyOtherDetails' len=234
+2026-04-10 22:55:59,669 - INFO - Clicking Preview & Next button on Tab 2...
+2026-04-10 22:56:00,261 - INFO -   -> Clicked via value-based selector
+2026-04-10 22:56:04,831 - INFO - ADVANCEMENT SUCCESS: On Tab 3 (Preview & Submit).
+2026-04-10 22:56:04,831 - INFO - RPA Halted on Tab 3 for review.
+2026-04-10 22:56:13,051 - ERROR - Bot error: Page.wait_for_timeout: Target page, context or browser has been closed
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_complaint_bot.py", line 2236, in <module>
+    run_bot(payload)
+    ~~~~~~~^^^^^^^^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_complaint_bot.py", line 2230, in run_bot
+    page.screenshot(path="bot_error.png")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\sync_api\_generated.py", line 9778, in screenshot
+    self._sync(
+    ~~~~~~~~~~^
+        self._impl_obj.screenshot(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<13 lines>...
+        )
+        ^
+    )
+    ^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_page.py", line 789, in screenshot
+    encoded_binary = await self._channel.send("screenshot", params)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 61, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 528, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TargetClosedError: Page.screenshot: Target page, context or browser has been closed
+
+--- Dispatch Triggered at 2026-04-10T17:53:42.092Z ---
+CWD: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher
+Bot Dir: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot
+Python: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Scripts\python.exe
+Script: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_complaint_bot.py
+Payload: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_tmp\payload_1775843622091.json
+
+2026-04-10 23:23:43,115 - INFO - Loading payload from: C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_tmp\payload_1775843622091.json
+2026-04-10 23:23:43,115 - INFO - Payload loaded for complaint: 804628a9-848d-46ab-bf4d-73da35ad5b77
+2026-04-10 23:23:43,116 - INFO - ShieldHer RPA Bot Starting...
+2026-04-10 23:24:02,333 - INFO - === TAB 1: Complaint & Incident Details ===
+2026-04-10 23:24:02,333 - INFO - Step 1: Category -> 'Women/Children Related Crime'
+2026-04-10 23:24:02,333 - INFO - Selecting #ContentPlaceHolder1_ddl_CategoryCrime: value=14, label=Women/Children Related Crime, index=3
+2026-04-10 23:24:02,369 - INFO -   -> Selected by value='14'
+2026-04-10 23:24:04,387 - INFO - Step 2: Date -> 2026-04-10
+2026-04-10 23:24:04,410 - INFO - Step 3: Time
+2026-04-10 23:24:04,440 - INFO - Step 4: Delay reason
+2026-04-10 23:24:04,456 - INFO - Step 5: State -> 'HARYANA'
+2026-04-10 23:24:04,456 - INFO - Selecting #ContentPlaceHolder1_ddl_State: value=None, label=HARYANA, index=11
+2026-04-10 23:24:04,488 - INFO -   -> Selected by exact label='HARYANA'
+2026-04-10 23:24:04,495 - INFO - Waiting for District dropdown to populate...
+2026-04-10 23:24:04,717 - INFO - District dropdown populated.
+2026-04-10 23:24:04,717 - INFO - Step 6: District -> label='Karnal', index=1
+2026-04-10 23:24:04,717 - INFO - Selecting #ContentPlaceHolder1_ddl_District: value=None, label=Karnal, index=1
+2026-04-10 23:24:34,866 - INFO -   -> Fuzzy match: 'KARNAL'
+2026-04-10 23:24:34,867 - INFO - Step 7: Information Source -> 'WhatsApp'
+2026-04-10 23:24:34,867 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 23:24:34,895 - INFO -   -> Selected by value='9'
+2026-04-10 23:24:36,413 - INFO - Target value to fill in dynamic fields: '8798767578'
+2026-04-10 23:24:36,413 - INFO - Scanning for dynamic input fields for platform whatsapp...
+2026-04-10 23:24:37,540 - INFO -   -> MATCH FOUND for exact selector: #ContentPlaceHolder1_txt_Info
+2026-04-10 23:24:38,224 - INFO -   -> Successfully filled via exact selector.
+2026-04-10 23:24:38,224 - INFO - Step 8: Uploading 1 evidence files...
+2026-04-10 23:24:38,229 - INFO -   [1/1] Uploading evidence_batch_804628a9-848d-46ab-bf4d-73da35ad5b77_0_1775843622089.jpg (rows before: 0)
+2026-04-10 23:24:38,230 - INFO - [1/1] -> Re-selecting information source: WhatsApp
+2026-04-10 23:24:38,230 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 23:24:38,247 - INFO -   -> Selected by value='9'
+2026-04-10 23:24:41,296 - INFO -     -> File selected via #ContentPlaceHolder1_fu_info: name='evidence_batch_804628a9-848d-46ab-bf4d-73da35ad5b77_0_1775843622089.jpg', value='C:\fakepath\evidence_batch_804628a9-848d-46ab-bf4d-73da35ad5b77_0_1775843622089.jpg'
+2026-04-10 23:24:41,302 - INFO -     -> Pre-ADD file state: len=1 name='evidence_batch_804628a9-848d-46ab-bf4d-73da35ad5b77_0_1775843622089.jpg' value='C:\fakepath\evidence_batch_804628a9-848d-46ab-bf4d-73da35ad5b77_0_1775843622089.jpg'
+2026-04-10 23:24:53,213 - WARNING -     -> Could not confirm filename in evidence table for evidence_batch_804628a9-848d-46ab-bf4d-73da35ad5b77_0_1775843622089.jpg
+2026-04-10 23:24:53,506 - INFO - [final] -> Re-selecting information source: WhatsApp
+2026-04-10 23:24:53,506 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 23:24:53,525 - INFO -   -> Selected by value='9'
+2026-04-10 23:24:56,179 - INFO - [post-upload] -> Re-selecting information source: WhatsApp
+2026-04-10 23:24:56,179 - INFO - Selecting #ContentPlaceHolder1_ddl_InformationSource: value=9, label=WhatsApp, index=2
+2026-04-10 23:24:56,196 - INFO -   -> Selected by value='9'
+2026-04-10 23:24:58,816 - INFO - Step 9: Additional info (1490 chars)
+2026-04-10 23:24:59,047 - INFO - Clicking SAVE & NEXT...
+2026-04-10 23:25:03,232 - INFO - ADVANCEMENT SUCCESS: On Tab 2.
+2026-04-10 23:25:03,232 - INFO - === TAB 2: Suspect Details ===
+2026-04-10 23:25:04,274 - INFO - FIX 1: Scraped 14 ID Type dropdown options:
+2026-04-10 23:25:04,274 - INFO -   [0] value='0' label='---Select---'
+2026-04-10 23:25:04,275 - INFO -   [1] value='1' label='Driving License'
+2026-04-10 23:25:04,275 - INFO -   [2] value='2' label='Email'
+2026-04-10 23:25:04,275 - INFO -   [3] value='3' label='Gov. Issued Card'
+2026-04-10 23:25:04,275 - INFO -   [4] value='4' label='Mobile Number'
+2026-04-10 23:25:04,275 - INFO -   [5] value='5' label='PAN Card'
+2026-04-10 23:25:04,275 - INFO -   [6] value='6' label='Voter Card'
+2026-04-10 23:25:04,275 - INFO -   [7] value='7' label='Other'
+2026-04-10 23:25:04,275 - INFO -   [8] value='8' label='Social Media Profile URL'
+2026-04-10 23:25:04,275 - INFO -   [9] value='9' label='Landline Call'
+2026-04-10 23:25:04,275 - INFO -   [10] value='10' label='International Call'
+2026-04-10 23:25:04,275 - INFO -   [11] value='11' label='WhatsApp Call'
+2026-04-10 23:25:04,275 - INFO -   [12] value='22' label='Bank Account Number'
+2026-04-10 23:25:04,275 - INFO -   [13] value='23' label='URL'
+2026-04-10 23:25:04,275 - INFO - Filling suspect name: Ayush
+2026-04-10 23:25:04,322 - INFO - FIX 2: User ID Type='Mobile Number' | FIX 4: ID Value='9898989887'
+2026-04-10 23:25:04,323 - INFO - FIX 2: Matched -> value='4' label='Mobile Number'
+2026-04-10 23:25:04,336 - INFO - FIX 2: Selected by value='4'
+2026-04-10 23:25:05,866 - INFO - FIX 3: Phone-type ID detected ('Mobile Number'), handling phone selector flow...
+2026-04-10 23:25:05,904 - INFO - FIX 3: Ticked phone selector 'Mobile No' via label[for]
+2026-04-10 23:25:07,420 - INFO - FIX 3: Selecting INDIA (+91) country code...
+2026-04-10 23:26:07,485 - WARNING - FIX 3: Country code selection error: Locator.select_option: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("select:visible").nth(1)
+  -     - locator resolved to <select disabled="disabled" class="aspNetDisabled form-select" id="ContentPlaceHolder1_ddl_Councode" name="ctl00$ContentPlaceHolder1$ddl_Councode" title="Provide suspect's country code if known to you">…</select>
+  -   - attempting select option action
+  -     2 × waiting for element to be visible and enabled
+  -       - element is not enabled
+  -     - retrying select option action
+  -     - waiting 20ms
+  -     2 × waiting for element to be visible and enabled
+  -       - element is not enabled
+  -     - retrying select option action
+  -       - waiting 100ms
+  -     59 × waiting for element to be visible and enabled
+  -        - element is not enabled
+  -      - retrying select option action
+  -        - waiting 500ms
+
+2026-04-10 23:26:07,486 - INFO - FIX 3: Filling phone number: 9898989887
+2026-04-10 23:26:08,190 - INFO - FIX 3: Filled phone into #ContentPlaceHolder1_txt_IdNo
+2026-04-10 23:26:08,190 - INFO - FIX 3: Suspect ADD attempt 1/3
+2026-04-10 23:26:08,219 - WARNING - FIX 4: Inline row ID value fill did not confirm: {'ok': False, 'reason': 'no_target_input'}
+2026-04-10 23:26:08,423 - INFO - FIX 4: Verified ID value present near ADD (field='ContentPlaceHolder1_txt_IdNo')
+2026-04-10 23:26:08,428 - INFO - FIX 3: Tab2 grid signature before ADD (attempt 1): {'ok': True, 'tableCount': 0, 'rowsTotal': 0, 'nameHits': 0, 'idHits': 0}
+2026-04-10 23:26:08,493 - INFO - FIX 3: Tab2 ADD clicked via REAL click selector '#ContentPlaceHolder1_btnAddSuspect:visible'
+2026-04-10 23:26:10,932 - INFO - FIX 3: Tab2 grid signature after ADD (attempt 1): {'ok': True, 'tableCount': 1, 'rowsTotal': 2, 'nameHits': 1, 'idHits': 1}
+2026-04-10 23:26:10,937 - INFO - FIX 3: Suspect ADD confirmed (sig=True, row=True).
+2026-04-10 23:26:10,965 - INFO - Tab2 additional info filled via textarea fallback id='txt_AnyOtherDetails' len=83
+2026-04-10 23:26:11,194 - INFO - Clicking Preview & Next button on Tab 2...
+2026-04-10 23:26:11,520 - INFO -   -> Clicked via value-based selector
+2026-04-10 23:26:15,935 - INFO - ADVANCEMENT SUCCESS: On Tab 3 (Preview & Submit).
+2026-04-10 23:26:15,936 - INFO - RPA Halted on Tab 3 for review.
+2026-04-10 23:27:55,216 - ERROR - Bot error: Page.wait_for_timeout: Target page, context or browser has been closed
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_complaint_bot.py", line 2236, in <module>
+    run_bot(payload)
+    ~~~~~~~^^^^^^^^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\rpa_complaint_bot.py", line 2230, in run_bot
+    page.screenshot(path="bot_error.png")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\sync_api\_generated.py", line 9778, in screenshot
+    self._sync(
+    ~~~~~~~~~~^
+        self._impl_obj.screenshot(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<13 lines>...
+        )
+        ^
+    )
+    ^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_page.py", line 789, in screenshot
+    encoded_binary = await self._channel.send("screenshot", params)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 61, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\PROJECTS\SHIELD-HER\shieldher\bot\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 528, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TargetClosedError: Page.screenshot: Target page, context or browser has been closed
