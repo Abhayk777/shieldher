@@ -2228,10 +2228,17 @@ def run_bot(data: dict):
         # HEADLESS MODE: Required for GitHub Actions / Servers
         # Set headless=False only if you are debugging locally on your own computer.
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(viewport={"width": 1280, "height": 800})
+        # SPOOFING: Make the GitHub server look like a normal Windows user.
+        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            user_agent=user_agent
+        )
         page = context.new_page()
         
-        # Auto-handle unexpected JS alerts/confirmations that can block Tab 2 flow.
+        url = "https://cybercrime.gov.in/Webform/Crime_ReportAnonymously.aspx"
+        
+        # Auto-handle unexpected JS alerts/confirmations
         def _on_dialog(dialog):
             try:
                 msg = dialog.message
@@ -2245,8 +2252,13 @@ def run_bot(data: dict):
         
         page.on("dialog", _on_dialog)
         try:
-            page.goto("https://cybercrime.gov.in/Webform/Crime_ReportAnonymously.aspx", timeout=90000)
-            page.wait_for_timeout(3000)
+            # INCREASED TIMEOUT: 120 seconds instead of 90
+            page.goto(url, wait_until="networkidle", timeout=120000)
+        except Exception as e:
+            log.warning(f"Initial navigation timed out: {e}. Retrying with 'load'...")
+            page.goto(url, wait_until="load", timeout=120000)
+        
+        page.wait_for_timeout(3000)
 
             # Dismiss Accept
             try: page.locator("text='I Accept'").click(timeout=2000)
