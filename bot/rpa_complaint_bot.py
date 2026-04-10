@@ -2293,50 +2293,60 @@ def run_bot(data: dict):
         # HEADLESS MODE: Required for GitHub Actions / Servers
         # Set headless=False only if you are debugging locally on your own computer.
         browser = p.chromium.launch(headless=True)
-        # SPOOFING: Make the GitHub server look like a normal Windows user.
-        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        context = browser.new_context(
-            viewport={"width": 1280, "height": 800},
-            user_agent=user_agent
-        )
-        page = context.new_page()
-        
-        url = "https://cybercrime.gov.in/Webform/Crime_ReportAnonymously.aspx"
-        
-        # Auto-handle unexpected JS alerts/confirmations
-        def _on_dialog(dialog):
+        try:
+            # SPOOFING: Make the GitHub server look like a normal Windows user.
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            context = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                user_agent=user_agent
+            )
+            page = context.new_page()
+            
+            url = "https://cybercrime.gov.in/Webform/Crime_ReportAnonymously.aspx"
+            
+            # Auto-handle unexpected JS alerts/confirmations
+            def _on_dialog(dialog):
+                try:
+                    msg = dialog.message
+                except Exception:
+                    msg = ""
+                log.warning(f"Browser dialog intercepted: {msg}")
+                try:
+                    dialog.accept()
+                except Exception:
+                    pass
+            
+            page.on("dialog", _on_dialog)
+            
+            # 1. Navigate to Portal
             try:
-                msg = dialog.message
-            except Exception:
-                msg = ""
-            log.warning(f"Browser dialog intercepted: {msg}")
+                # INCREASED TIMEOUT: 120 seconds instead of 90
+                page.goto(url, wait_until="networkidle", timeout=120000)
+            except Exception as e:
+                log.warning(f"Initial navigation timed out: {e}. Retrying with 'load'...")
+                page.goto(url, wait_until="load", timeout=120000)
+            
+            page.wait_for_timeout(3000)
+
+            # 2. Dismiss initial "I Accept" modal
             try:
-                dialog.accept()
+                page.locator("text='I Accept'").click(timeout=3000)
             except Exception:
                 pass
-        
-        page.on("dialog", _on_dialog)
-        try:
-            # INCREASED TIMEOUT: 120 seconds instead of 90
-            page.goto(url, wait_until="networkidle", timeout=120000)
-        except Exception as e:
-            log.warning(f"Initial navigation timed out: {e}. Retrying with 'load'...")
-            page.goto(url, wait_until="load", timeout=120000)
-        
-        page.wait_for_timeout(3000)
 
-            # Dismiss Accept
-            try: page.locator("text='I Accept'").click(timeout=2000)
-            except: pass
-
+            # 3. Filling the Complaint
             if fill_tab1(page, data):
                 fill_tab2(page, data)
 
             log.info("RPA Halted on Tab 3 for review.")
-            page.wait_for_timeout(300000)  # 5 mins
+            page.wait_for_timeout(30000)  # 30 seconds wait for artifact captures
+            
         except Exception as e:
             log.error(f"Bot error: {e}")
-            page.screenshot(path="bot_error.png")
+            try:
+                page.screenshot(path="bot_error.png")
+            except:
+                pass
         finally:
             browser.close()
 
