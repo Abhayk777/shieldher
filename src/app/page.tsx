@@ -36,7 +36,7 @@ export default function Home() {
           </h1>
           <p className="hero-subtitle">
             Shield Her uses AI to analyze threatening conversations, detect manipulation,
-            and give you clarity — protecting your safety, privacy, and peace of mind.
+            and give you clarity — protecting your safety, privacy, and peace of mind and help.
           </p>
           <div className="hero-cta-group">
             <Link href="/auth" className="hero-cta-btn">
@@ -252,107 +252,107 @@ export default function Home() {
           {/* Centered content wrapper — constrains to readable width while bg is full-bleed */}
           <div className="outcomes-inner">
 
-          <Reveal>
-            <div className="outcomes-header">
-              <h2>
-                Changing lives through
-                <br />
-                proven outcomes
-              </h2>
-              <p>
-                Our AI-driven approach to digital safety has redefined what
-                personal protection looks like in the modern world.
-              </p>
-            </div>
-          </Reveal>
-
-          <div className="outcomes-body">
-            <Reveal delay={0}>
-              <div className="outcomes-stats">
-                <div>
-                  <span className="outcomes-stat-label">Detection Accuracy</span>
-                  <div className="outcomes-stat-number">98%</div>
-                  <p className="outcomes-stat-desc">
-                    Our AI correctly identifies threatening patterns with 98% accuracy
-                    across all major threat categories — from subtle coercion to explicit danger.
-                  </p>
-                </div>
-
-                <div>
-                  <span className="outcomes-stat-label">Analysis Speed</span>
-                  <div className="outcomes-stat-number">&lt;30s</div>
-                  <p className="outcomes-stat-desc">
-                    Every screenshot is fully analyzed in under 30 seconds. No waiting,
-                    no appointments — protection exactly when you need it most.
-                  </p>
-                </div>
-
-                <div style={{ paddingTop: "2rem" }}>
-                  <Link href="/auth" className="outcomes-download-btn">
-                    Start Your Free Analysis
-                  </Link>
-                </div>
+            <Reveal>
+              <div className="outcomes-header">
+                <h2>
+                  Changing lives through
+                  <br />
+                  proven outcomes
+                </h2>
+                <p>
+                  Our AI-driven approach to digital safety has redefined what
+                  personal protection looks like in the modern world.
+                </p>
               </div>
             </Reveal>
 
-            <Reveal delay={150}>
-              <div className="outcomes-chart-card">
-                <div className="chart-header">
+            <div className="outcomes-body">
+              <Reveal delay={0}>
+                <div className="outcomes-stats">
                   <div>
-                    <h4>Safety Index</h4>
-                    <p>Protection Level vs. Time</p>
+                    <span className="outcomes-stat-label">Detection Accuracy</span>
+                    <div className="outcomes-stat-number">98%</div>
+                    <p className="outcomes-stat-desc">
+                      Our AI correctly identifies threatening patterns with 98% accuracy
+                      across all major threat categories — from subtle coercion to explicit danger.
+                    </p>
                   </div>
-                  <div className="chart-legend">
-                    <div className="legend-item">
-                      <span className="legend-dot" style={{ background: "#a2cbef" }} />
-                      <span className="legend-label">Shield Her</span>
-                    </div>
-                    <div className="legend-item">
-                      <span className="legend-dot" style={{ background: "#757575" }} />
-                      <span className="legend-label">Standard</span>
-                    </div>
+
+                  <div>
+                    <span className="outcomes-stat-label">Analysis Speed</span>
+                    <div className="outcomes-stat-number">&lt;30s</div>
+                    <p className="outcomes-stat-desc">
+                      Every screenshot is fully analyzed in under 30 seconds. No waiting,
+                      no appointments — protection exactly when you need it most.
+                    </p>
+                  </div>
+
+                  <div style={{ paddingTop: "2rem" }}>
+                    <Link href="/auth" className="outcomes-download-btn">
+                      Start Your Free Analysis
+                    </Link>
                   </div>
                 </div>
+              </Reveal>
 
-                <div className="chart-area">
-                  <svg
-                    viewBox="0 0 400 250"
-                    width="100%"
-                    height="100%"
-                    style={{ overflow: "visible" }}
-                  >
-                    {/* Grid lines */}
-                    <line x1="0" y1="250" x2="400" y2="250" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-                    <line x1="0" y1="187.5" x2="400" y2="187.5" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-                    <line x1="0" y1="125" x2="400" y2="125" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-                    <line x1="0" y1="62.5" x2="400" y2="62.5" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-                    {/* Standard / baseline */}
-                    <path
-                      d="M0,200 L100,190 L200,195 L300,185 L400,190"
-                      fill="none"
-                      stroke="rgba(255,255,255,0.2)"
-                      strokeWidth="2"
-                      strokeDasharray="4"
-                    />
-                    {/* Shield Her curve */}
-                    <path
-                      d="M0,200 C100,190 200,50 400,20"
-                      fill="none"
-                      stroke="#a2cbef"
-                      strokeWidth="6"
-                      strokeLinecap="round"
-                    />
-                    {/* Data points */}
-                    <circle cx="400" cy="20" r="6" fill="white" />
-                    <circle cx="0" cy="200" r="4" fill="white" opacity="0.5" />
-                  </svg>
+              <Reveal delay={150}>
+                <div className="outcomes-chart-card">
+                  <div className="chart-header">
+                    <div>
+                      <h4>Safety Index</h4>
+                      <p>Protection Level vs. Time</p>
+                    </div>
+                    <div className="chart-legend">
+                      <div className="legend-item">
+                        <span className="legend-dot" style={{ background: "#a2cbef" }} />
+                        <span className="legend-label">Shield Her</span>
+                      </div>
+                      <div className="legend-item">
+                        <span className="legend-dot" style={{ background: "#757575" }} />
+                        <span className="legend-label">Standard</span>
+                      </div>
+                    </div>
+                  </div>
 
-                  <div className="chart-peak-badge">Peak Safety Achieved</div>
+                  <div className="chart-area">
+                    <svg
+                      viewBox="0 0 400 250"
+                      width="100%"
+                      height="100%"
+                      style={{ overflow: "visible" }}
+                    >
+                      {/* Grid lines */}
+                      <line x1="0" y1="250" x2="400" y2="250" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+                      <line x1="0" y1="187.5" x2="400" y2="187.5" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+                      <line x1="0" y1="125" x2="400" y2="125" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+                      <line x1="0" y1="62.5" x2="400" y2="62.5" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+                      {/* Standard / baseline */}
+                      <path
+                        d="M0,200 L100,190 L200,195 L300,185 L400,190"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.2)"
+                        strokeWidth="2"
+                        strokeDasharray="4"
+                      />
+                      {/* Shield Her curve */}
+                      <path
+                        d="M0,200 C100,190 200,50 400,20"
+                        fill="none"
+                        stroke="#a2cbef"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                      />
+                      {/* Data points */}
+                      <circle cx="400" cy="20" r="6" fill="white" />
+                      <circle cx="0" cy="200" r="4" fill="white" opacity="0.5" />
+                    </svg>
+
+                    <div className="chart-peak-badge">Peak Safety Achieved</div>
+                  </div>
                 </div>
-              </div>
-            </Reveal>
-          </div>
-          {/* /outcomes-inner */}
+              </Reveal>
+            </div>
+            {/* /outcomes-inner */}
           </div>
         </div>
       </section>
