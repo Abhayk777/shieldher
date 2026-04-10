@@ -1,0 +1,18 @@
+name: RPA Complaint Bot
+on:
+  repository_dispatch:
+    types: [new_complaint]
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install dependencies
+        run: |
+          pip install playwright
+          playwright install chromium
+      - name: Execute Bot
+        run: python bot/rpa_complaint_bot.py --payload '${{ github.event.client_payload.data }}'
