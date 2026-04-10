@@ -28,7 +28,9 @@ const PLATFORM_TO_INFO_SOURCE: Record<string, number> = {
 
 // ─── Explicit textual label mapping to defeat index shifts ───
 const FORCED_CATEGORY_LABEL = "Women/Children Related Crime";
+const FORCED_CATEGORY_VALUE = "14"; 
 const FORCED_SUBCATEGORY_LABEL = "Sexually Explicit Act";
+const FORCED_SUBCATEGORY_VALUE = ""; 
 
 // ─── Suspect ID type → dropdown index mapping ───
 const SUSPECT_ID_TYPE_MAP: Record<string, number> = {
@@ -113,7 +115,7 @@ export async function POST(request: NextRequest) {
     const suspectInfo = rpaData?.suspect_info;
 
     // ─── Save evidence to temp files ───
-    const tmpDir = path.resolve(process.cwd(), '../rpa_tmp');
+    const tmpDir = path.resolve(process.cwd(), 'bot/rpa_tmp');
     if (!fs.existsSync(tmpDir)) {
       fs.mkdirSync(tmpDir, { recursive: true });
     }
@@ -207,7 +209,9 @@ export async function POST(request: NextRequest) {
     const botPayload = {
       complaint_id: upload_id || `shieldher-${Date.now()}`,
       category_label: FORCED_CATEGORY_LABEL,
+      category_value: FORCED_CATEGORY_VALUE,
       subcategory_label: FORCED_SUBCATEGORY_LABEL,
+      subcategory_value: FORCED_SUBCATEGORY_VALUE,
       date: incidentDate,
       hour: incidentHour,
       minute: incidentMinute,
@@ -238,12 +242,33 @@ export async function POST(request: NextRequest) {
     fs.writeFileSync(payloadPath, JSON.stringify(botPayload, null, 2));
 
     // ─── Spawn the Python bot ───
-    const scriptPath = path.resolve(process.cwd(), '../rpa_complaint_bot.py');
-    const venvPythonPath = path.resolve(process.cwd(), '../.venv/Scripts/python.exe');
+    const scriptPath = path.resolve(process.cwd(), 'bot/rpa_complaint_bot.py');
+    const venvPythonPath = path.resolve(process.cwd(), 'bot/.venv/Scripts/python.exe');
+
+    const botDir = path.resolve(process.cwd(), 'bot');
+    const logPath = path.join(botDir, 'rpa_tmp', 'bot_output.log');
+    
+    // Ensure the log file's directory exists
+    if (!fs.existsSync(path.dirname(logPath))) {
+      fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    }
+
+    const logFd = fs.openSync(logPath, 'a');
+    fs.writeSync(logFd, `\n--- Dispatch Triggered at ${new Date().toISOString()} ---\n`);
+    fs.writeSync(logFd, `CWD: ${process.cwd()}\n`);
+    fs.writeSync(logFd, `Bot Dir: ${botDir}\n`);
+    fs.writeSync(logFd, `Python: ${venvPythonPath}\n`);
+    fs.writeSync(logFd, `Script: ${scriptPath}\n`);
+    fs.writeSync(logFd, `Payload: ${payloadPath}\n\n`);
 
     const child = spawn(venvPythonPath, [scriptPath, '--payload', payloadPath], {
       detached: true,
-      stdio: 'ignore',
+      stdio: ['ignore', logFd, logFd],
+      cwd: botDir,
+    });
+
+    child.on('error', (err) => {
+      fs.appendFileSync(logPath, `Spawn Error: ${err.message}\n`);
     });
 
     child.unref();
