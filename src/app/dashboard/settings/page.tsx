@@ -16,6 +16,9 @@ import {
   FileText,
   MapPin,
   Phone,
+  Lock,
+  Unlock,
+  Key,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -61,6 +64,16 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [lawyerMessage, setLawyerMessage] = useState('');
   const [lawyerError, setLawyerError] = useState('');
+
+  // Lawyer Vault State
+  const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
+  const [hasKeys, setHasKeys] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [vaultMessage, setVaultMessage] = useState('');
+  const [vaultError, setVaultError] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const [generatingKeys, setGeneratingKeys] = useState(false);
+
   const router = useRouter();
   const backHref = isLawyer ? '/lawyer/dashboard' : '/dashboard';
   const backLabel = isLawyer ? 'Back to Lawyer Dashboard' : 'Back to Dashboard';
@@ -100,6 +113,12 @@ export default function SettingsPage() {
         if (profile?.ghost_mode !== undefined) {
           setGhostMode(profile.ghost_mode);
         }
+
+        // Check for forensic keys
+        setHasKeys(Boolean(user.user_metadata?.public_key));
+        const { retrieveLawyerPrivateKey } = await import('@/lib/crypto');
+        const privKey = await retrieveLawyerPrivateKey();
+        if (privKey) setIsVaultUnlocked(true);
       }
       setLoading(false);
     }
@@ -212,6 +231,124 @@ export default function SettingsPage() {
     }
 
     setSavingLawyerProfile(false);
+  };
+
+  const handleGenerateKeys = async () => {
+    setGeneratingKeys(true);
+    setVaultError('');
+    setVaultMessage('');
+
+    try {
+      const { 
+        generateRSAKeyPair, 
+        exportPublicKey, 
+        encryptText, 
+        retrieveKey,
+        storeLawyerPrivateKey,
+        uint8ArrayToBase64,
+        base64ToUint8Array
+      } = await import('@/lib/crypto');
+
+      // 1. Generate new RSA pair
+      const keyPair = await generateRSAKeyPair();
+      
+      // 2. Export Public Key
+      const pubKeyBase64 = await exportPublicKey(keyPair.publicKey);
+
+      // 3. Export Private Key (PKCS8)
+      const privKeyBuffer = await window.crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
+      const privKeyBase64 = uint8ArrayToBase64(new Uint8Array(privKeyBuffer));
+
+      // 4. Encrypt Private Key with Lawyer's Master Key
+      const masterKey = await retrieveKey();
+      if (!masterKey) {
+        throw new Error('Main Vault is locked. Please unlock your identity vault first to secure forensic keys.');
+      }
+      
+      const encryptedPrivKey = await encryptText(masterKey, privKeyBase64);
+
+      // 5. Save to Supabase
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const existingMetadata = asObject(user.user_metadata);
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: {
+          ...existingMetadata,
+          public_key: pubKeyBase64,
+          encrypted_private_key: encryptedPrivKey,
+        }
+      });
+
+      if (updateError) throw updateError;
+
+      await storeLawyerPrivateKey(keyPair.privateKey);
+      setIsVaultUnlocked(true);
+      setHasKeys(true);
+      setVaultMessage('Forensic encryption keys generated and secured.');
+    } catch (err: any) {
+      setVaultError(err.message || 'Failed to generate keys.');
+    } finally {
+      setGeneratingKeys(false);
+    }
+  };
+
+  const handleUnlockVault = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUnlocking(true);
+    setVaultError('');
+
+    try {
+      const { 
+        decryptText, 
+        retrieveKey,
+        deriveKey,
+        storeKey,
+        asObject
+      } = await import('@/lib/crypto');
+
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Session expired');
+
+      let masterKey = await retrieveKey();
+      
+      // If no master key in memory, we need to derive it from the password provided
+      if (!masterKey) {
+        const metadata = asObject(user.user_metadata);
+        const salt = String(metadata.encryption_salt || '');
+        if (!salt) throw new Error('Encryption salt missing. Please contact support.');
+        
+        masterKey = await deriveKey(unlockPassword, salt);
+        await storeKey(masterKey, salt);
+      }
+
+      const encryptedPrivKey = asObject(user.user_metadata?.encrypted_private_key);
+      if (!encryptedPrivKey || !encryptedPrivKey.ciphertext) {
+        throw new Error('No secured private key found in your account.');
+      }
+
+      const privKeyBase64 = await decryptText(masterKey, encryptedPrivKey as any);
+      const privKeyBuffer = base64ToUint8Array(privKeyBase64).buffer;
+
+      const privKey = await window.crypto.subtle.importKey(
+        'pkcs8',
+        privKeyBuffer,
+        { name: 'RSA-OAEP', hash: 'SHA-256' },
+        true,
+        ['unwrapKey']
+      );
+
+      await storeLawyerPrivateKey(privKey);
+      setIsVaultUnlocked(true);
+      setVaultMessage('Forensic vault unlocked.');
+    } catch (err: any) {
+      setVaultError('Unable to unlock forensic vault. Ensure your password is correct.');
+    } finally {
+      setUnlocking(false);
+      setUnlockPassword('');
+    }
   };
 
   const handleToggleGhostMode = async () => {
@@ -469,6 +606,72 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </form>
+
+              {/* LAWYER FORENSIC VAULT SECTION */}
+              <div className={styles.divider} />
+              
+              <div className={styles.vaultSection}>
+                <div className={styles.cardHeader}>
+                  <div className={`${styles.iconWrap} ${styles.vaultIconWrap}`}>
+                    <Shield size={22} />
+                  </div>
+                  <div>
+                    <h3 className={styles.cardTitle}>Legal Forensic Vault</h3>
+                    <p className={styles.cardDesc}>Securely manage client evidence decryption keys.</p>
+                  </div>
+                </div>
+
+                {hasKeys ? (
+                  isVaultUnlocked ? (
+                    <div className={styles.vaultStatusActive}>
+                      <Unlock size={24} className={styles.unlockIcon} />
+                      <div>
+                        <p className={styles.vaultStatusTitle}>Vault Unlocked</p>
+                        <p className={styles.vaultStatusDesc}>You can now view decrypted client evidence and forensic reports.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleUnlockVault} className={styles.unlockForm}>
+                      <div className={styles.field}>
+                        <label className={styles.label}>Unlock Forensic Access</label>
+                        <p className={styles.helpText}>Enter your account password to load your private forensic keys into memory.</p>
+                        <div className={styles.inputWrap}>
+                          <Lock size={18} className={styles.inputIcon} />
+                          <input
+                            type="password"
+                            className={`${styles.input} ${styles.inputWithIcon}`}
+                            value={unlockPassword}
+                            onChange={(e) => setUnlockPassword(e.target.value)}
+                            placeholder="Account Password"
+                            required
+                          />
+                        </div>
+                      </div>
+                      {vaultError && <p className={styles.vaultError}>{vaultError}</p>}
+                      <button type="submit" className={styles.unlockBtn} disabled={unlocking}>
+                        {unlocking ? <Loader size={16} className="animate-spin" /> : <Unlock size={16} />}
+                        Unlock Vault
+                      </button>
+                    </form>
+                  )
+                ) : (
+                  <div className={styles.setupVault}>
+                    <p className={styles.setupText}>
+                      Your forensic key pair has not been generated yet. You must create one to accept and decrypt client evidence.
+                    </p>
+                    <button 
+                      onClick={handleGenerateKeys} 
+                      className={styles.generateBtn} 
+                      disabled={generatingKeys}
+                    >
+                      {generatingKeys ? <Loader size={16} className="animate-spin" /> : <Key size={16} />}
+                      Generate Forensic Key Pair
+                    </button>
+                    {vaultError && <p className={styles.vaultError}>{vaultError}</p>}
+                  </div>
+                )}
+                {vaultMessage && <p className={styles.vaultSuccess}>{vaultMessage}</p>}
+              </div>
             </div>
           )}
         </div>

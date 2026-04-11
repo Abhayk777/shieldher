@@ -21,6 +21,7 @@ type AcceptedCaseEntry = {
   case_file: string;
   status: 'accepted';
   accepted_at: string;
+  wrapped_key?: string;
 };
 
 function normalize(value: string): string {
@@ -69,6 +70,7 @@ function listAcceptedCases(metadata: Record<string, unknown>): AcceptedCaseEntry
       case_file: caseFile,
       status: 'accepted',
       accepted_at: acceptedAt,
+      wrapped_key: toText(entry.wrapped_key).trim(),
     });
   }
 
@@ -185,6 +187,9 @@ export async function POST(request: Request) {
       (entry) => !(entry.upload_id === upload.id && entry.lawyer_id === requester.id)
     );
 
+    const pendingShares = asObject(clientMetadata.pending_lawyer_access);
+    const wrappedKeyForLawyer = toText(pendingShares[requester.id]).trim();
+
     const acceptedEntry: AcceptedCaseEntry = {
       upload_id: upload.id,
       lawyer_id: requester.id,
@@ -193,6 +198,7 @@ export async function POST(request: Request) {
       case_file: upload.file_name || `Case ${upload.id.slice(0, 8)}`,
       status: 'accepted',
       accepted_at: nowIso,
+      wrapped_key: wrappedKeyForLawyer,
     };
 
     const nextMetadata = {

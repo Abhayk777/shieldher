@@ -12,6 +12,7 @@ type LawyerProfile = {
   bar_council_id: string;
   contact_number: string;
   joined_at: string;
+  public_key?: string;
 };
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -80,8 +81,9 @@ export async function GET(request: Request) {
       office_city: toText(lawyerProfile.office_city) || 'Not specified',
       years_of_experience: toText(lawyerProfile.years_of_experience) || 'Not specified',
       bar_council_id: toText(lawyerProfile.bar_council_id) || 'Not specified',
-      contact_number: toText(lawyerProfile.contact_number) || toText(metadata.phone) || 'Not provided',
+       contact_number: toText(lawyerProfile.contact_number) || toText(metadata.phone) || 'Not provided',
       joined_at: data.user.created_at ?? '',
+      public_key: toText(metadata.public_key),
     };
 
     return NextResponse.json({ lawyer });

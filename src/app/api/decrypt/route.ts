@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { decryptBuffer, decryptText } from '@/lib/crypto-server';
+import { asObject, createAdminClient, toText } from '@/lib/communication/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +29,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Upload not found' }, { status: 404 });
     }
 
-    if (upload.user_id !== user.id) {
+    const requesterMetadata = asObject(requester.user_metadata);
+    const isOwner = upload.user_id === requester.id;
+    let isAuthorizedLawyer = false;
+
+    if (!isOwner && toText(requesterMetadata.role) === 'lawyer') {
+      try {
+        const supabaseAdmin = createAdminClient();
+        const { data: clientLookup } = await supabaseAdmin.auth.admin.getUserById(upload.user_id);
+        const clientMetadata = asObject(clientLookup?.user?.user_metadata);
+        const acceptedCases = clientMetadata.accepted_cases;
+        
+        if (Array.isArray(acceptedCases)) {
+          isAuthorizedLawyer = acceptedCases.some((c: any) => 
+            toText(c.upload_id) === uploadId && 
+            toText(c.lawyer_id) === requester.id && 
+            toText(c.status) === 'accepted'
+          );
+        }
+      } catch (e) {
+        console.error('[DecryptProxy] Lawyer auth verification failed:', e);
+      }
+    }
+
+    if (!isOwner && !isAuthorizedLawyer) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

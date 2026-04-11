@@ -19,6 +19,7 @@ type LawyerProfile = {
   bar_council_id: string;
   contact_number: string;
   joined_at: string;
+  public_key?: string;
 };
 
 function parseRole(value: unknown): UserRole | null {
@@ -72,7 +73,7 @@ export default function LawyerProfilePage() {
   const [lawyer, setLawyer] = useState<LawyerProfile | null>(null);
   const [selectedLawyerId, setSelectedLawyerId] = useState('');
 
-  const saveLawyerSelection = async (options?: { markContacted?: boolean }) => {
+  const saveLawyerSelection = async (options?: { markContacted?: boolean; wrappedKey?: string | null }) => {
     if (!lawyer) return false;
 
     const supabase = createClient();
@@ -105,6 +106,14 @@ export default function LawyerProfilePage() {
       nextMetadata.lawyer_contacted_at = nowIso;
       nextMetadata.contacted_at = nowIso;
       nextMetadata.first_contact_at = toText(existingMetadata.first_contact_at) || nowIso;
+    }
+
+    if (options?.wrappedKey) {
+      const pendingShares = asObject(existingMetadata.pending_lawyer_access);
+      nextMetadata.pending_lawyer_access = {
+        ...pendingShares,
+        [lawyer.id]: options.wrappedKey,
+      };
     }
 
     const { error: updateError } = await supabase.auth.updateUser({
@@ -190,7 +199,21 @@ export default function LawyerProfilePage() {
       setError('');
       setContacting(true);
 
-      const saved = await saveLawyerSelection({ markContacted: true });
+      // E2EE: Prepare case key for lawyer
+      const { retrieveKey, importPublicKey, wrapMasterKey } = await import('@/lib/crypto');
+      const masterKey = await retrieveKey();
+      let wrappedKey: string | null = null;
+      
+      if (masterKey && lawyer.public_key) {
+        try {
+          const pubKey = await importPublicKey(lawyer.public_key);
+          wrappedKey = await wrapMasterKey(masterKey, pubKey);
+        } catch (e) {
+          console.error('E2EE: Failed to wrap forensic key for lawyer:', e);
+        }
+      }
+
+      const saved = await saveLawyerSelection({ markContacted: true, wrappedKey });
       if (!saved) return;
 
       const res = await fetch('/api/communications/start', {

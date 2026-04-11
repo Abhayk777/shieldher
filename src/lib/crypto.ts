@@ -145,6 +145,7 @@ export async function decryptFile(
 
 let memoizedKey: CryptoKey | null = null;
 let memoizedSalt: string | null = null;
+let memoizedLawyerPrivateKey: CryptoKey | null = null;
 
 /**
  * Store the CryptoKey and salt in memory.
@@ -164,11 +165,26 @@ export async function retrieveKey(): Promise<CryptoKey | null> {
 }
 
 /**
- * Clear the stored encryption key (on logout).
+ * Store the Lawyer's Private RSA Key in memory.
+ */
+export async function storeLawyerPrivateKey(key: CryptoKey): Promise<void> {
+  memoizedLawyerPrivateKey = key;
+}
+
+/**
+ * Retrieve the Lawyer's Private RSA Key from memory.
+ */
+export async function retrieveLawyerPrivateKey(): Promise<CryptoKey | null> {
+  return memoizedLawyerPrivateKey;
+}
+
+/**
+ * Clear the stored encryption keys (on logout).
  */
 export function clearKey(): void {
   memoizedKey = null;
   memoizedSalt = null;
+  memoizedLawyerPrivateKey = null;
 }
 
 /**
@@ -176,6 +192,75 @@ export function clearKey(): void {
  */
 export function getStoredSalt(): string | null {
   return memoizedSalt;
+}
+
+// ═══ ASYMMETRIC ENCRYPTION (RSA-OAEP) ═══
+
+/**
+ * Generate a 2048-bit RSA-OAEP key pair for a lawyer.
+ */
+export async function generateRSAKeyPair(): Promise<CryptoKeyPair> {
+  return window.crypto.subtle.generateKey(
+    {
+      name: 'RSA-OAEP',
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-256',
+    },
+    true, // extractable
+    ['wrapKey', 'unwrapKey']
+  );
+}
+
+/**
+ * Export a public key to base64 (SPKI format).
+ */
+export async function exportPublicKey(key: CryptoKey): Promise<string> {
+  const exported = await window.crypto.subtle.exportKey('spki', key);
+  return uint8ArrayToBase64(new Uint8Array(exported));
+}
+
+/**
+ * Import a public key from base64 (SPKI format).
+ */
+export async function importPublicKey(base64: string): Promise<CryptoKey> {
+  const buffer = base64ToUint8Array(base64);
+  return window.crypto.subtle.importKey(
+    'spki',
+    buffer,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    true,
+    ['wrapKey']
+  );
+}
+
+/**
+ * Wrap a symmetric AES key using an RSA public key.
+ */
+export async function wrapMasterKey(masterKey: CryptoKey, publicKey: CryptoKey): Promise<string> {
+  const wrapped = await window.crypto.subtle.wrapKey(
+    'raw',
+    masterKey,
+    publicKey,
+    'RSA-OAEP'
+  );
+  return uint8ArrayToBase64(new Uint8Array(wrapped));
+}
+
+/**
+ * Unwrap a symmetric AES key using an RSA private key.
+ */
+export async function unwrapMasterKey(wrappedKeyBase64: string, privateKey: CryptoKey): Promise<CryptoKey> {
+  const buffer = base64ToUint8Array(wrappedKeyBase64);
+  return window.crypto.subtle.unwrapKey(
+    'raw',
+    buffer,
+    privateKey,
+    'RSA-OAEP',
+    'AES-GCM',
+    true,
+    ['encrypt', 'decrypt']
+  );
 }
 
 // ═══ UTILITY: Base64 ↔ Uint8Array ═══

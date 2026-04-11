@@ -140,9 +140,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
     }
 
+    // Find the wrapped_key in the client's accepted_cases metadata
+    const acceptedCases = clientMetadata.accepted_cases;
+    let wrappedKey = '';
+    if (Array.isArray(acceptedCases)) {
+      const entry = acceptedCases.find((c: any) => 
+        toText(c.upload_id) === uploadId && 
+        toText(c.lawyer_id) === user.id && 
+        toText(c.status) === 'accepted'
+      );
+      if (entry) {
+        wrappedKey = toText(entry.wrapped_key);
+      }
+    }
+
     return NextResponse.json({
       upload,
       analysis,
+      wrapped_key: wrappedKey,
       client: {
         id: clientUser.id,
         name: toText(clientMetadata.full_name) || clientUser.email?.split('@')[0] || 'ShieldHer User',

@@ -17,6 +17,8 @@ import {
   Scale,
   ShieldCheck,
   Target,
+  Unlock,
+  Key,
 } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -28,6 +30,7 @@ type LawyerAnalysisResponse = {
     name: string;
     location: string;
   };
+  wrapped_key?: string;
 };
 
 export default function LawyerAnalysisDetailsPage() {
@@ -40,6 +43,11 @@ export default function LawyerAnalysisDetailsPage() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [clientName, setClientName] = useState('Client');
   const [clientLocation, setClientLocation] = useState('Location unavailable');
+
+  // Encryption State
+  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [isVaultLocked, setIsVaultLocked] = useState(false);
+  const [decryptedMediaArray, setDecryptedMediaArray] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadDetails() {
@@ -60,10 +68,52 @@ export default function LawyerAnalysisDetailsPage() {
           throw new Error(payload.error || 'Could not load client analysis details.');
         }
 
-        setUpload(payload.upload);
-        setAnalysis(payload.analysis);
+        const nextUpload = payload.upload;
+        const nextAnalysis = payload.analysis;
+        const wrappedKey = payload.wrapped_key;
+
+        setUpload(nextUpload);
+        setAnalysis(nextAnalysis);
         setClientName(payload.client?.name || 'ShieldHer User');
         setClientLocation(payload.client?.location || 'Location unavailable');
+
+        // Automatic Decryption Flow
+        if (wrappedKey) {
+          try {
+            setIsDecrypting(true);
+            const { retrieveLawyerPrivateKey, unwrapMasterKey, uint8ArrayToBase64 } = await import('@/lib/crypto');
+            
+            const privKey = await retrieveLawyerPrivateKey();
+            if (!privKey) {
+              setIsVaultLocked(true);
+              setIsDecrypting(false);
+              return;
+            }
+
+            const masterKeyObj = await unwrapMasterKey(wrappedKey, privKey);
+            const masterKeyRaw = await window.crypto.subtle.exportKey('raw', masterKeyObj);
+            const masterKeyBase64 = uint8ArrayToBase64(new Uint8Array(masterKeyRaw));
+
+            // Call Forensic Decryption Proxy
+            const decryptRes = await fetch('/api/decrypt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uploadId, masterKey: masterKeyBase64 })
+            });
+
+            if (decryptRes.ok) {
+              const decryptData = await decryptRes.json();
+              if (decryptData.success) {
+                setAnalysis(decryptData.analysis);
+                setDecryptedMediaArray(decryptData.decryptedMediaArray || []);
+              }
+            }
+          } catch (e) {
+            console.error('Forensic decryption failed:', e);
+          } finally {
+            setIsDecrypting(false);
+          }
+        }
       } catch (loadError: unknown) {
         if (loadError instanceof Error) {
           setError(loadError.message);
@@ -106,7 +156,11 @@ export default function LawyerAnalysisDetailsPage() {
         : kind === 'audio'
           ? `Audio Recording ${index + 1}`
           : `File ${index + 1}`;
-    return { url, kind, label };
+    
+    // Check if we have a decrypted version
+    const decryptedUrl = decryptedMediaArray[index]?.decrypted ? decryptedMediaArray[index].url : url;
+    
+    return { url: decryptedUrl, kind, label, decrypted: decryptedMediaArray[index]?.decrypted || false };
   });
 
   return (
@@ -160,6 +214,27 @@ export default function LawyerAnalysisDetailsPage() {
                 <RiskBadge level={analysis.risk_level} size="lg" />
               </div>
             </section>
+
+            {isVaultLocked && (
+              <div className={styles.lockedNotice}>
+                <div className={styles.noticeIcon}>
+                  <Unlock size={20} />
+                </div>
+                <div className={styles.noticeContent}>
+                  <h4>Forensic Vault Locked</h4>
+                  <p>Client evidence is encrypted. Please unlock your forensic vault in settings to view plaintext data.</p>
+                </div>
+                <Link href="/dashboard/settings" className={styles.settingsLink}>
+                  Open Settings
+                </Link>
+              </div>
+            )}
+
+            {isDecrypting && (
+              <div className={styles.decryptingOverlay}>
+                <LoadingSpinner text="Unlocking forensic evidence..." />
+              </div>
+            )}
 
             <section className={styles.section}>
               <h3 className={styles.sectionTitle}>
