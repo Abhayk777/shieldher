@@ -126,7 +126,9 @@ export async function POST(request: NextRequest) {
     if (evidence_items && evidence_items.length > 0) {
       evidence_items.forEach((item, idx) => {
         const ext = (item.mime_type || 'image/png').includes('jpeg') ? '.jpg' : '.png';
-        const p = path.join(tmpDir, `evidence_batch_${upload_id}_${idx}_${Date.now()}${ext}`);
+        // CRITICAL: Use short, simple filenames. The cybercrime portal's JS validator
+        // rejects files with long names containing special characters like UUIDs.
+        const p = path.join(tmpDir, `evidence_${idx + 1}${ext}`);
         fs.writeFileSync(p, Buffer.from(item.base64, 'base64'));
         evidencePaths.push(p);
       });
@@ -134,13 +136,13 @@ export async function POST(request: NextRequest) {
     // Handle single evidence (Legacy / Single Upload)
     else if (evidence_base64) {
       const ext = (evidence_mime_type || 'image/png').includes('jpeg') ? '.jpg' : '.png';
-      const p = path.join(tmpDir, `evidence_${Date.now()}${ext}`);
+      const p = path.join(tmpDir, `evidence_1${ext}`);
       fs.writeFileSync(p, Buffer.from(evidence_base64, 'base64'));
       evidencePaths.push(p);
     }
     // Fallback dummy evidence
     else {
-      const p = path.join(tmpDir, `evidence_dummy_${Date.now()}.png`);
+      const p = path.join(tmpDir, `evidence_1.png`);
       fs.writeFileSync(p, Buffer.from(
         '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82',
         'binary'
