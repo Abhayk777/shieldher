@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { type Upload, type AnalysisFlag, type RiskLevel } from "@/lib/types";
-import { retrieveKey, uint8ArrayToBase64 } from "@/lib/crypto";
+import { retrieveKey, uint8ArrayToBase64, decryptFile } from "@/lib/crypto";
 import { createClient } from "@/lib/supabase/client";
 import RiskBadge from "@/components/RiskBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -175,13 +175,55 @@ export default function AnalysisDetailPage() {
       // We no longer call /api/dispatch (which fails on Vercel)
       // Instead, we update the status in Supabase to 'ready_to_file'
       // This triggers the Supabase Webhook -> Edge Function -> GitHub Action Bot
+      let transitPath = upload?.file_url;
+
+      // --- E2EE DECRYPTION BRIDGE ---
+      // If the file is encrypted, we decrypt it in the browser and upload a 
+      // temporary unencrypted copy for the bot to use. 
+      const encryptionKey = await retrieveKey();
+      if (upload?.file_iv && encryptionKey && upload?.file_url) {
+        console.log("E2EE Evidence detected. Preparing decrypted transit copy...");
+        
+        // 1. Download encrypted blob
+        const { data: encryptedData, error: downloadError } = await supabase
+          .storage
+          .from('evidence')
+          .download(upload.file_url.replace('evidence/', ''));
+        
+        if (downloadError) throw new Error(`Failed to download encrypted evidence: ${downloadError.message}`);
+
+        // 2. Decrypt locally
+        const decryptedBlob = await decryptFile(
+          encryptionKey, 
+          await encryptedData.arrayBuffer(), 
+          upload.file_iv
+        );
+
+        // 3. Upload to transit folder
+        const transitFilename = `transit/${uploadId}-${Date.now()}.png`;
+        const { data: transitData, error: uploadError } = await supabase
+          .storage
+          .from('evidence')
+          .upload(transitFilename, decryptedBlob, {
+            contentType: 'image/png',
+            cacheControl: '60', // Very short cache
+            upsert: true
+          });
+
+        if (uploadError) throw new Error(`Failed to upload decrypted transit file: ${uploadError.message}`);
+        
+        transitPath = `evidence/${transitFilename}`;
+        console.log("Transit bridge ready:", transitPath);
+      }
+
+      // 4. Update status and metadata
       const { error } = await supabase
         .from('uploads')
         .update({ 
           status: 'ready_to_file',
           dispatch_metadata: {
             ...formData,
-            file_url: upload?.file_url
+            file_url: transitPath
           }
         })
         .eq('id', uploadId);

@@ -5,12 +5,9 @@ on:
   workflow_dispatch:
 jobs:
   run-bot:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
       - name: Install dependencies
         run: |
           pip install playwright requests
@@ -19,4 +16,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python bot/rpa_complaint_bot.py --payload '${{ toJson(github.event.client_payload.data) }}'
+        shell: cmd
+        run: python bot/rpa_complaint_bot.py --payload "${{ toJson(github.event.client_payload.data) }}"
