@@ -263,37 +263,38 @@ export async function POST(request: NextRequest) {
       if (process.env.KANOON_API_TOKEN && result.details?.legal_analysis?.kanoon_search_keywords && userCountry.toLowerCase() === 'india') {
         try {
           const kQuery = result.details.legal_analysis.kanoon_search_keywords;
-          const kRes = await fetch('https://api.indiankanoon.org/search/', {
-            method: 'POST',
+          const params = new URLSearchParams({ formInput: kQuery, pagenum: '0' });
+          const kUrl = `https://api.indiankanoon.org/search/?${params.toString()}`;
+          
+          console.log(`[Kanoon] Fetching legal precedents for: "${kQuery}"`);
+          
+          const kRes = await fetch(kUrl, {
+            method: 'GET',
             headers: {
               'Authorization': `Token ${process.env.KANOON_API_TOKEN}`,
               'Accept': 'application/json',
-              'Content-Type': 'application/x-www-form-urlencoded',
               'User-Agent': 'ShieldHer-Legal-Bot'
-            },
-            body: new URLSearchParams({ formInput: kQuery, pagenum: '0' }).toString()
+            }
           });
 
           if (kRes.ok) {
             const kData = (await kRes.json()) as any;
+            console.log(`[Kanoon] Successfully retrieved ${kData.docs?.length || 0} documents.`);
             const topDocs = (kData.docs || []).slice(0, 3).map((d: any) =>
               `- Title: ${d.title.replace(/<[^>]+>/g, '')}\n  Snippet: ${d.headline.replace(/<[^>]+>/g, '')}`
             ).join('\n\n');
 
             if (topDocs) {
-              const synthesisPrompt = `You are an expert Indian Cyber-Lawyer. Synthesize this legal analysis with the following real Indian Kanoon results for a high-priority evidence analysis.
+              const synthesisPrompt = `You are a Senior Indian Cyber-Lawyer. Synthesize this legal analysis with the following real Indian Kanoon results into a professional "Preliminary Legal Memorandum".
               
               Original Analysis Summary: ${result.details.legal_analysis.summary}
               
-              Actual Legal Documents Found on Indian Kanoon:
+              Actual Legal Documents (Precedents) Found on Indian Kanoon:
               ${topDocs}
               
-              Task: Draft a formal "Preliminary Legal Memorandum" in Markdown. 
+              Task: Draft a formal, elite-level "Preliminary Legal Memorandum" in Markdown. 
               
               STRICT FORMAT REQUIREMENT:
-              # Preliminary Legal Analysis
-              ## Deep Legal Profile powered by Indian Kanoon API
-              
               # PRELIMINARY LEGAL MEMORANDUM
               **DATE:** ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               **TO:** Concerned Party
@@ -303,24 +304,28 @@ export async function POST(request: NextRequest) {
               ---
               
               ### I. EXECUTIVE SUMMARY
-              [Brief high-level summary]
+              [Brief high-level summary of the legal implications (e.g. violations of bodily autonomy and digital privacy)]
               
               ### II. CASE FACTS
-              [Summarize what happened based on the evidence]
+              [Summarize what happened based on the evidence, highlighting persistence and refusal]
               
               ### III. APPLICABLE LAWS & STATUTES
-              [Detailed discussion of Sections like 354D, 66E, 67, etc. Quote the laws where helpful]
+              [Detailed discussion of relevant sections. Specifically include reference to:
+              - Section 354D (IPC): Stalking
+              - Section 354A (IPC): Sexual Harassment
+              - Section 66E (IT Act): Violation of Privacy
+              - Section 67 (IT Act): Obscene material]
               
               ### IV. ANALYSIS & APPLICATION OF PRECEDENT
-              [Apply the specific case results from Kanoon to this situation]
+              [Crucial Section: Use the Indian Kanoon results (${kQuery}) to show a "zero tolerance" stance. Mention themes like "digital chain of custody", "primary substantive proof", and "systematic pursuit of harassment". Use the specific case titles from the search results.]
               
               ### V. PRELIMINARY RECOMMENDATIONS
-              [Immediate legal and safety steps]
+              [1. Immediate Preservation, 2. Formal Documentation (cybercrime.gov.in), 3. Digital Restraint, 4. Legal Counsel]
               
               ### VI. DISCLAIMER
               *This AI-generated analysis is for informational purposes only and does not constitute professional legal advice. Please consult with a qualified attorney.*
               
-              CRITICAL: Translate the ENTIRE memo (including headers) into strictly: ${language}. Use professional legal terminology appropriate for ${language}.`;
+              CRITICAL: Translate the ENTIRE memo (including headers and Section numbers) into: ${language}. Use the highest level of professional legal terminology.`;
               
               let synthesisDone = false;
               for (const sModelName of modelCandidates) {
@@ -341,8 +346,13 @@ export async function POST(request: NextRequest) {
                 if (synthesisDone) break;
               }
             }
+          } else {
+            const errText = await kRes.text();
+            console.error(`[Kanoon] Request failed with status ${kRes.status}: ${errText}`);
           }
-        } catch (kErr) { console.error('Kanoon integration failed:', kErr); }
+        } catch (kErr) { 
+          console.error('[Kanoon] integration failed with exception:', kErr); 
+        }
       }
 
     } catch (aiError: any) {
