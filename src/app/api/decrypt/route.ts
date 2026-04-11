@@ -18,8 +18,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 1. Fetch upload record (always exist if id is valid)
-    const { data: upload, error: uploadError } = await supabase
+    const supabaseAdmin = createAdminClient();
+
+    // 1. Fetch upload record using ADMIN client to bypass RLS (authorization check follows)
+    const { data: upload, error: uploadError } = await supabaseAdmin
       .from('uploads')
       .select('*')
       .eq('id', uploadId)
@@ -35,7 +37,6 @@ export async function POST(request: NextRequest) {
 
     if (!isOwner && toText(requesterMetadata.role) === 'lawyer') {
       try {
-        const supabaseAdmin = createAdminClient();
         const { data: clientLookup } = await supabaseAdmin.auth.admin.getUserById(upload.user_id);
         const clientMetadata = asObject(clientLookup?.user?.user_metadata);
         const acceptedCases = clientMetadata.accepted_cases;
@@ -56,12 +57,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // 2. Fetch analysis results (might not exist yet)
-    const { data: analysis } = await supabase
+    // 2. Fetch analysis results using ADMIN client
+    const { data: analysis } = await supabaseAdmin
       .from('analysis_results')
       .select('*')
       .eq('upload_id', uploadId)
-      .single();
+      .maybeSingle();
 
     // 3. Decrypt analysis fields
     let decryptedAnalysis = null;
