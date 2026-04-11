@@ -227,7 +227,7 @@ export async function importPublicKey(base64: string): Promise<CryptoKey> {
   const buffer = base64ToUint8Array(base64);
   return window.crypto.subtle.importKey(
     'spki',
-    buffer,
+    buffer as any,
     { name: 'RSA-OAEP', hash: 'SHA-256' },
     true,
     ['wrapKey']
@@ -254,7 +254,7 @@ export async function unwrapMasterKey(wrappedKeyBase64: string, privateKey: Cryp
   const buffer = base64ToUint8Array(wrappedKeyBase64);
   return window.crypto.subtle.unwrapKey(
     'raw',
-    buffer,
+    buffer as any,
     privateKey,
     'RSA-OAEP',
     'AES-GCM',

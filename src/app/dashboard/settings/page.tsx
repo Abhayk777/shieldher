@@ -305,7 +305,8 @@ export default function SettingsPage() {
         retrieveKey,
         deriveKey,
         storeKey,
-        asObject
+        base64ToUint8Array,
+        storeLawyerPrivateKey,
       } = await import('@/lib/crypto');
 
       const supabase = createClient();
@@ -330,11 +331,11 @@ export default function SettingsPage() {
       }
 
       const privKeyBase64 = await decryptText(masterKey, encryptedPrivKey as any);
-      const privKeyBuffer = base64ToUint8Array(privKeyBase64).buffer;
+      const privKeyBuffer = base64ToUint8Array(privKeyBase64);
 
       const privKey = await window.crypto.subtle.importKey(
         'pkcs8',
-        privKeyBuffer,
+        privKeyBuffer as any,
         { name: 'RSA-OAEP', hash: 'SHA-256' },
         true,
         ['unwrapKey']
