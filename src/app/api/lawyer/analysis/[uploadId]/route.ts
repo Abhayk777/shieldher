@@ -1,25 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
-
-type UploadRow = {
-  id: string;
-  user_id: string;
-  file_url: string;
-  file_name: string;
-  status: string;
-  created_at: string;
-};
-
-type AnalysisRow = {
-  id: string;
-  upload_id: string;
-  risk_level: string;
-  summary: string;
-  flags: unknown;
-  details: unknown;
-  created_at: string;
-};
+import { decryptBuffer, decryptText } from '@/lib/crypto-server';
 
 function asObject(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -88,9 +70,10 @@ export async function GET(request: Request) {
       }
     );
 
+    // 1. Fetch upload record (with ALL fields including file_iv, original_type)
     const { data: uploadData, error: uploadError } = await supabaseAdmin
       .from('uploads')
-      .select('id, user_id, file_url, file_name, status, created_at')
+      .select('*')
       .eq('id', uploadId)
       .maybeSingle();
 
@@ -99,8 +82,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Upload not found' }, { status: 404 });
     }
 
-    const upload = uploadData as UploadRow;
+    const upload = uploadData;
 
+    // 2. Verify lawyer-client relationship
     const { data: clientUserResult, error: clientUserError } =
       await supabaseAdmin.auth.admin.getUserById(upload.user_id);
 
@@ -126,38 +110,76 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Access denied for this client evidence' }, { status: 403 });
     }
 
+    // 3. Fetch analysis results (ALL fields including encrypted ones)
     const { data: analysisRows, error: analysisError } = await supabaseAdmin
       .from('analysis_results')
-      .select('id, upload_id, risk_level, summary, flags, details, created_at')
+      .select('*')
       .eq('upload_id', uploadId)
       .order('created_at', { ascending: false })
       .limit(1);
 
     if (analysisError) throw analysisError;
-    const analysis = (analysisRows as AnalysisRow[] | null)?.[0];
+    const analysis = analysisRows?.[0];
 
     if (!analysis) {
       return NextResponse.json({ error: 'Analysis not found' }, { status: 404 });
     }
 
-    // Find the wrapped_key in the client's accepted_cases metadata
-    const acceptedCases = clientMetadata.accepted_cases;
-    let wrappedKey = '';
-    if (Array.isArray(acceptedCases)) {
-      const entry = acceptedCases.find((c: any) => 
-        toText(c.upload_id) === uploadId && 
-        toText(c.lawyer_id) === user.id && 
-        toText(c.status) === 'accepted'
-      );
-      if (entry) {
-        wrappedKey = toText(entry.wrapped_key);
+    // 4. Get the client's evidence_access_key for server-side decryption
+    const masterKey = toText(clientMetadata.evidence_access_key);
+
+    let decryptedAnalysis = { ...analysis };
+    let decryptedMediaArray: { url: string; decrypted: boolean }[] = [];
+
+    if (masterKey) {
+      // 5. Decrypt analysis text fields
+      if (analysis.encrypted_summary) {
+        try {
+          const iv = analysis.encryption_iv;
+          const summary = decryptText(analysis.encrypted_summary, masterKey, iv);
+          const flagsJson = decryptText(analysis.encrypted_flags, masterKey, iv);
+          const detailsJson = decryptText(analysis.encrypted_details, masterKey, iv);
+
+          decryptedAnalysis.summary = summary;
+          decryptedAnalysis.flags = flagsJson ? JSON.parse(flagsJson) : (analysis.flags || []);
+          decryptedAnalysis.details = detailsJson ? JSON.parse(detailsJson) : (analysis.details || {});
+        } catch (e) {
+          console.error('[LawyerAnalysis] Text decryption failed:', e);
+        }
       }
+
+      // 6. Decrypt media files
+      const fileUrls = (upload.file_url || '').split(',').filter(Boolean);
+      const fileIVs = (upload.file_iv || '').split(',').filter(Boolean);
+      const fileTypes = (upload.original_type || '').split(',').filter(Boolean);
+
+      decryptedMediaArray = await Promise.all(fileUrls.map(async (url: string, idx: number) => {
+        try {
+          const iv = fileIVs[idx];
+          if (!iv) return { url, decrypted: false };
+
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('Failed to fetch from storage');
+
+          const encryptedBuffer = Buffer.from(await res.arrayBuffer());
+          const decryptedBuffer = decryptBuffer(encryptedBuffer, masterKey, iv);
+
+          const mimeType = fileTypes[idx] || 'image/png';
+          return {
+            url: `data:${mimeType};base64,${decryptedBuffer.toString('base64')}`,
+            decrypted: true,
+          };
+        } catch (e) {
+          console.error(`[LawyerAnalysis] Media decryption failed for asset ${idx}:`, e);
+          return { url, decrypted: false };
+        }
+      }));
     }
 
     return NextResponse.json({
       upload,
-      analysis,
-      wrapped_key: wrappedKey,
+      analysis: decryptedAnalysis,
+      decryptedMediaArray,
       client: {
         id: clientUser.id,
         name: toText(clientMetadata.full_name) || clientUser.email?.split('@')[0] || 'ShieldHer User',

@@ -120,6 +120,20 @@ export async function POST(request: NextRequest) {
       }
     }));
 
+    // 5. If this is the OWNER decrypting, persist the masterKey for lawyer access
+    if (isOwner) {
+      try {
+        await supabaseAdmin.auth.admin.updateUserById(requester.id, {
+          user_metadata: {
+            ...requesterMetadata,
+            evidence_access_key: masterKey,
+          }
+        });
+      } catch (e) {
+        console.error('[DecryptProxy] Failed to persist evidence access key:', e);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       analysis: decryptedAnalysis,
