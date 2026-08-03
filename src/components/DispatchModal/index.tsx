@@ -124,15 +124,27 @@ const DISTRICTS_BY_STATE: Record<string, string[]> = (() => {
 })();
 
 function buildInitialFormData(initialData?: DispatchModalProps["initialData"]): DispatchFormData {
+  const suspectName = (initialData?.suspect_name || "").trim();
+  let platformContact = (initialData?.suspect_platform_contact || "").trim();
+  let idValue = (initialData?.suspect_id_value || "").trim();
+
+  // Prevent suspect name from leaking into contact or ID fields
+  if (platformContact && suspectName && platformContact.toLowerCase() === suspectName.toLowerCase()) {
+    platformContact = "";
+  }
+  if (idValue && suspectName && idValue.toLowerCase() === suspectName.toLowerCase()) {
+    idValue = "";
+  }
+
   return {
     user_state: "DELHI",
     user_district: "",
     user_email: "",
     user_platform: initialData?.platform || "WhatsApp",
-    user_suspect_name: initialData?.suspect_name || "",
-    user_suspect_platform_contact: initialData?.suspect_platform_contact || "",
+    user_suspect_name: suspectName,
+    user_suspect_platform_contact: platformContact,
     user_suspect_id_type: initialData?.suspect_id_type || "none",
-    user_suspect_id_value: initialData?.suspect_id_value || "",
+    user_suspect_id_value: idValue,
     user_incident_date: initialData?.incident_date || new Date().toISOString().split("T")[0],
     user_incident_hour: "10",
     user_incident_minute: "30",
@@ -148,6 +160,23 @@ export default function DispatchModal({
   initialData,
 }: DispatchModalProps) {
   const [formData, setFormData] = useState<DispatchFormData>(() => buildInitialFormData(initialData));
+
+  // Reset form when initialData changes or modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setFormData(buildInitialFormData(initialData));
+    }
+  }, [isOpen, initialData]);
+
+  // Lock background body scroll while modal is open
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
 
   const districtOptions = useMemo(() => {
     const stateKey = normalizeStateKey(formData.user_state);
@@ -175,159 +204,168 @@ export default function DispatchModal({
   };
 
   return (
-    <div className={styles.overlay}>
-      <div className={styles.modal}>
+    <div
+      className={styles.overlay}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isLoading) {
+          onClose();
+        }
+      }}
+    >
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <div className={styles.headerTitle}>
             <Send className={styles.icon} size={20} />
             <h2>Dispatch Forensic RPA Bot</h2>
           </div>
-          <button className={styles.closeBtn} onClick={onClose} disabled={isLoading}>
+          <button className={styles.closeBtn} onClick={onClose} disabled={isLoading} type="button">
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.content}>
-          <div className={styles.infoBanner}>
-            <AlertCircle size={16} />
-            <p>Filling this form will launch an autonomous bot to file your complaint on the National Cyber Crime Reporting Portal.</p>
-          </div>
+        <form onSubmit={handleSubmit} className={styles.modalForm}>
+          <div className={styles.scrollableContent}>
+            <div className={styles.infoBanner}>
+              <AlertCircle size={16} />
+              <p>Filling this form will launch an autonomous bot to file your complaint on the National Cyber Crime Reporting Portal.</p>
+            </div>
 
-          <div className={styles.grid}>
-            {/* Location Section */}
-            <div className={styles.section}>
-              <h3><MapPin size={14} /> Location Details</h3>
-              <div className={styles.inputGroup}>
-                <label>State</label>
-                <select name="user_state" value={formData.user_state} onChange={handleChange} required>
-                  {INDIAN_STATES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-              <div className={styles.inputGroup}>
-                <label>District</label>
-                <select
-                  name="user_district"
-                  value={formData.user_district}
-                  onChange={handleChange}
-                  required
-                  disabled={districtOptions.length === 0}
-                >
-                  <option value="">
-                    {districtOptions.length > 0
-                      ? "Select District"
-                      : "No district list available"}
-                  </option>
-                  {districtOptions.map((district) => (
-                    <option key={district} value={district}>
-                      {district}
+            <div className={styles.grid}>
+              {/* Location Section */}
+              <div className={styles.section}>
+                <h3><MapPin size={14} /> Location Details</h3>
+                <div className={styles.inputGroup}>
+                  <label>State</label>
+                  <select name="user_state" value={formData.user_state} onChange={handleChange} required>
+                    {INDIAN_STATES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.inputGroup}>
+                  <label>District</label>
+                  <select
+                    name="user_district"
+                    value={formData.user_district}
+                    onChange={handleChange}
+                    required
+                    disabled={districtOptions.length === 0}
+                  >
+                    <option value="">
+                      {districtOptions.length > 0
+                        ? "Select District"
+                        : "No district list available"}
                     </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Victim Info */}
-            <div className={styles.section}>
-              <h3><Mail size={14} /> Your Contact</h3>
-              <div className={styles.inputGroup}>
-                <label>Email Address</label>
-                <input
-                  type="email"
-                  name="user_email"
-                  placeholder="For portal notifications"
-                  value={formData.user_email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Incident Timing */}
-            <div className={styles.section}>
-              <h3><Clock size={14} /> Incident Timing</h3>
-              <div className={styles.inputGroup}>
-                <label>Date</label>
-                <input
-                  type="date"
-                  name="user_incident_date"
-                  value={formData.user_incident_date}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className={styles.timeRow}>
-                <div className={styles.inputGroup}>
-                  <label>Hour</label>
-                  <select name="user_incident_hour" value={formData.user_incident_hour} onChange={handleChange}>
-                    {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(h => (
-                      <option key={h} value={h}>{h}</option>
+                    {districtOptions.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
                     ))}
                   </select>
                 </div>
-                <div className={styles.inputGroup}>
-                  <label>Min</label>
-                  <select name="user_incident_minute" value={formData.user_incident_minute} onChange={handleChange}>
-                    {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')).map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className={styles.inputGroup}>
-                  <label>AM/PM</label>
-                  <select name="user_incident_ampm" value={formData.user_incident_ampm} onChange={handleChange}>
-                    <option value="AM">AM</option>
-                    <option value="PM">PM</option>
-                  </select>
-                </div>
               </div>
-            </div>
 
-            {/* Suspect Info */}
-            <div className={styles.section + " " + styles.fullWidth}>
-              <h3><User size={14} /> Suspect Information (Analyzed)</h3>
-              <div className={styles.inputRow}>
+              {/* Victim Info */}
+              <div className={styles.section}>
+                <h3><Mail size={14} /> Your Contact</h3>
                 <div className={styles.inputGroup}>
-                  <label>Suspect Name/Alias</label>
+                  <label>Email Address</label>
                   <input
-                    type="text"
-                    name="user_suspect_name"
-                    value={formData.user_suspect_name}
+                    type="email"
+                    name="user_email"
+                    placeholder="For portal notifications"
+                    value={formData.user_email}
                     onChange={handleChange}
-                    placeholder="Unknown"
-                  />
-                </div>
-                <div className={styles.inputGroup}>
-                  <label>Platform Contact (ID/Phone)</label>
-                  <input
-                    type="text"
-                    name="user_suspect_platform_contact"
-                    value={formData.user_suspect_platform_contact}
-                    onChange={handleChange}
-                    placeholder="e.g. @username or Phone"
+                    required
                   />
                 </div>
               </div>
-              <div className={styles.inputRow}>
+
+              {/* Incident Timing */}
+              <div className={styles.section}>
+                <h3><Clock size={14} /> Incident Timing</h3>
                 <div className={styles.inputGroup}>
-                  <label>Other ID Type</label>
-                  <select name="user_suspect_id_type" value={formData.user_suspect_id_type} onChange={handleChange}>
-                    {ID_TYPES.map(t => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className={styles.inputGroup}>
-                  <label>Other ID Value</label>
+                  <label>Date</label>
                   <input
-                    type="text"
-                    name="user_suspect_id_value"
-                    value={formData.user_suspect_id_value}
+                    type="date"
+                    name="user_incident_date"
+                    value={formData.user_incident_date}
                     onChange={handleChange}
-                    placeholder="Specific ID number/value"
-                    disabled={formData.user_suspect_id_type === "none"}
+                    required
                   />
+                </div>
+                <div className={styles.timeRow}>
+                  <div className={styles.inputGroup}>
+                    <label>Hour</label>
+                    <select name="user_incident_hour" value={formData.user_incident_hour} onChange={handleChange}>
+                      {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>Min</label>
+                    <select name="user_incident_minute" value={formData.user_incident_minute} onChange={handleChange}>
+                      {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>AM/PM</label>
+                    <select name="user_incident_ampm" value={formData.user_incident_ampm} onChange={handleChange}>
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Suspect Info */}
+              <div className={styles.section + " " + styles.fullWidth}>
+                <h3><User size={14} /> Suspect Information (Analyzed)</h3>
+                <div className={styles.inputRow}>
+                  <div className={styles.inputGroup}>
+                    <label>Suspect Name/Alias</label>
+                    <input
+                      type="text"
+                      name="user_suspect_name"
+                      value={formData.user_suspect_name}
+                      onChange={handleChange}
+                      placeholder="Enter suspect name or alias"
+                    />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>Platform Contact (ID/Phone)</label>
+                    <input
+                      type="text"
+                      name="user_suspect_platform_contact"
+                      value={formData.user_suspect_platform_contact}
+                      onChange={handleChange}
+                      placeholder="Enter phone, email or handle"
+                    />
+                  </div>
+                </div>
+                <div className={styles.inputRow}>
+                  <div className={styles.inputGroup}>
+                    <label>Other ID Type</label>
+                    <select name="user_suspect_id_type" value={formData.user_suspect_id_type} onChange={handleChange}>
+                      {ID_TYPES.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>Other ID Value</label>
+                    <input
+                      type="text"
+                      name="user_suspect_id_value"
+                      value={formData.user_suspect_id_value}
+                      onChange={handleChange}
+                      placeholder={formData.user_suspect_id_type === "none" ? "Select ID Type first" : "Enter ID value"}
+                      disabled={formData.user_suspect_id_type === "none"}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
