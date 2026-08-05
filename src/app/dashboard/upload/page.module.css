@@ -663,3 +663,56 @@
     padding: 1rem;
   }
 }
+
+.kanoonBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #a16207;
+  background: rgba(234, 179, 8, 0.14);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.memoContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(248, 245, 235, 0.75));
+  border: 1px solid rgba(166, 163, 142, 0.35);
+  border-radius: 0.85rem;
+  padding: 1rem 1.15rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--upload-ink);
+}
+
+.memoSectionHeader {
+  margin: 0.8rem 0 0.25rem 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--upload-green-dark);
+  border-bottom: 1px solid rgba(70, 101, 80, 0.18);
+  padding-bottom: 0.25rem;
+}
+
+.memoListItem {
+  margin: 0;
+  padding-left: 0.75rem;
+  position: relative;
+  font-size: 0.86rem;
+  color: var(--upload-muted);
+}
+
+.memoParagraph {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--upload-muted);
+  line-height: 1.58;
+}

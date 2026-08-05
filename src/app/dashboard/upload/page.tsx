@@ -1,13 +1,40 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, Sparkles, Loader, Info, AlertTriangle, Lightbulb, Scale, ShieldCheck, MessageCircle, Activity, AlertOctagon } from 'lucide-react';
+import { ArrowLeft, Sparkles, Loader, Info, AlertTriangle, Lightbulb, Scale, ShieldCheck, MessageCircle, Activity, AlertOctagon, Zap } from 'lucide-react';
 import Link from 'next/link';
 import UploadZone from '@/components/UploadZone';
 import { createClient } from '@/lib/supabase/client';
 import { encryptFile, retrieveKey, uint8ArrayToBase64 } from '@/lib/crypto';
 import styles from './page.module.css';
 import { type AnalysisResult } from '@/lib/types';
+
+function FormatLegalMemo({ text }: { text: string }) {
+  if (!text) return null;
+  const cleanLine = (line: string) => {
+    return line.replace(/^#+\s*/, '').replace(/\*\*+/g, '').replace(/^-+\s*/, '').trim();
+  };
+
+  const lines = text.split('\n');
+  return (
+    <div className={styles.memoContent}>
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <br key={idx} />;
+
+        if (trimmed.startsWith('#') || (trimmed === trimmed.toUpperCase() && trimmed.length > 5 && !trimmed.includes('.'))) {
+          return <h4 key={idx} className={styles.memoSectionHeader}>{cleanLine(trimmed)}</h4>;
+        }
+
+        if (trimmed.startsWith('-') || trimmed.startsWith('*') || /^\d+\./.test(trimmed)) {
+          return <p key={idx} className={styles.memoListItem}>{cleanLine(trimmed)}</p>;
+        }
+
+        return <p key={idx} className={styles.memoParagraph}>{cleanLine(trimmed)}</p>;
+      })}
+    </div>
+  );
+}
 
 export default function UploadPage() {
   const [files, setFiles] = useState<File[]>([]);
@@ -285,12 +312,24 @@ export default function UploadPage() {
 
                   {analysisResult.details?.legal_analysis && (
                     <div className={styles.resultSection}>
-                      <div className={styles.resultSectionTitle}>
-                        <Scale size={18} /> Legal Perspective
+                      <div className={styles.resultSectionTitle} style={{ justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                          <Scale size={18} /> Legal Perspective
+                        </span>
+                        {analysisResult.details.legal_analysis.powered_by_kanoon && (
+                          <span className={styles.kanoonBadge}>
+                            <Zap size={13} fill="#eab308" color="#eab308" /> Kanoon Powered
+                          </span>
+                        )}
                       </div>
-                      <div className={styles.legalSummary} style={{ whiteSpace: 'pre-wrap' }}>
-                        {analysisResult.details.legal_analysis.summary.replace(/#/g, '')}
-                      </div>
+
+                      {analysisResult.details.legal_analysis.powered_by_kanoon ? (
+                        <FormatLegalMemo text={analysisResult.details.legal_analysis.summary} />
+                      ) : (
+                        <div className={styles.legalSummary} style={{ whiteSpace: 'pre-wrap' }}>
+                          {analysisResult.details.legal_analysis.summary.replace(/#/g, '')}
+                        </div>
+                      )}
 
                       {!analysisResult.details.legal_analysis.powered_by_kanoon && potentialViolations.length > 0 && (
                           <div className={styles.legalSectionsBlock}>
@@ -305,7 +344,7 @@ export default function UploadPage() {
                           </div>
                       )}
                       
-                      {!analysisResult.details.legal_analysis.powered_by_kanoon && (
+                      {analysisResult.details.legal_analysis.disclaimer && (
                         <p className={styles.disclaimer}>{analysisResult.details.legal_analysis.disclaimer}</p>
                       )}
                     </div>
